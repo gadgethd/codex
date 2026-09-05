@@ -1,53 +1,64 @@
-"""Read one bounded PNG frame from a portal-authorized PipeWire stream."""
+"""Capture a frame without letting a stalled native pipeline block the host."""
+
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
 
 from .dbus import PortalError
 
+CAPTURE_TIMEOUT = 12
+MAX_FRAME_BYTES = 16 * 1024 * 1024
+
 
 def capture_png(fd, stream, width, height):
-    try:
-        import gi
-
-        gi.require_version("Gst", "1.0")
-        gi.require_version("GstApp", "1.0")
-        from gi.repository import GLib, Gst, GstApp
-    except (ImportError, ValueError) as error:
-        raise PortalError(
-            "Install GStreamer Python bindings, PipeWire and PNG plugins."
-        ) from error
-    Gst.init(None)
-    scale = min(1, 2048 / max(width, height))
-    width, height = max(1, round(width * scale)), max(1, round(height * scale))
-    try:
-        pipeline = Gst.parse_launch(
-            "pipewiresrc name=source do-timestamp=true ! videoconvert ! videoscale ! "
-            f"video/x-raw,width={width},height={height},pixel-aspect-ratio=1/1 ! "
-            "pngenc snapshot=true ! appsink name=sink max-buffers=1 drop=true sync=false"
-        )
-    except GLib.Error as error:
-        raise PortalError(
-            f"Cannot create the desktop capture pipeline: {error.message}"
-        ) from error
-    source = pipeline.get_by_name("source")
-    source.set_property("fd", fd)
-    source.set_property("path", str(stream))
-    sink = pipeline.get_by_name("sink")
-    assert isinstance(sink, GstApp.AppSink)
-    try:
-        if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
-            raise PortalError("Failed to start the PipeWire capture stream.")
-        sample = sink.try_pull_sample(10 * Gst.SECOND)
-        if sample is None:
-            message = pipeline.get_bus().pop_filtered(Gst.MessageType.ERROR)
-            if message:
-                error, _debug = message.parse_error()
-                raise PortalError(f"PipeWire capture failed: {error.message}")
-            raise PortalError("Timed out waiting for a desktop frame.")
-        buffer = sample.get_buffer()
-        if not 0 < buffer.get_size() <= 16 * 1024 * 1024:
-            raise PortalError("Desktop frame exceeds the 16 MiB limit.")
-        png = buffer.extract_dup(0, buffer.get_size())
-        if not png.startswith(b"\x89PNG\r\n\x1a\n"):
-            raise PortalError("The capture pipeline returned an invalid PNG.")
-        return {"png": png, "width": width, "height": height}
-    finally:
-        pipeline.set_state(Gst.State.NULL)
+    # GStreamer state changes, including cleanup, may block indefinitely. A
+    # fresh interpreter also avoids inheriting the portal thread's GLib state.
+    with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
+        try:
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "codex_linux_computer_use.capture_worker",
+                    str(fd),
+                    str(stream),
+                    str(width),
+                    str(height),
+                ],
+                cwd=Path(__file__).resolve().parent.parent,
+                pass_fds=(fd,),
+                stdin=subprocess.DEVNULL,
+                stdout=output,
+                stderr=errors,
+                timeout=CAPTURE_TIMEOUT,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise PortalError(
+                "Desktop capture timed out; its worker was stopped."
+            ) from error
+        except OSError as error:
+            raise PortalError(
+                f"Cannot start the desktop capture worker: {error}"
+            ) from error
+        if result.returncode:
+            errors.seek(0)
+            detail = errors.read(512).decode("utf-8", errors="replace").strip()
+            raise PortalError(
+                detail
+                or f"Desktop capture worker exited with status {result.returncode}."
+            )
+        output.seek(0)
+        png = output.read(MAX_FRAME_BYTES + 1)
+    if (
+        not 24 <= len(png) <= MAX_FRAME_BYTES
+        or not png.startswith(b"\x89PNG\r\n\x1a\n")
+        or png[12:16] != b"IHDR"
+    ):
+        raise PortalError("The capture worker returned an invalid or oversized PNG.")
+    width = int.from_bytes(png[16:20], "big")
+    height = int.from_bytes(png[20:24], "big")
+    if not 0 < width <= 2048 or not 0 < height <= 2048:
+        raise PortalError("The capture worker returned invalid image dimensions.")
+    return {"png": png, "width": width, "height": height}
