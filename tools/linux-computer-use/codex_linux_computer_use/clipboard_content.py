@@ -5,6 +5,7 @@ import time
 from .clipboard import (
     MAX_BYTES,
     MAX_FORMATS,
+    ClipboardChanged,
     ClipboardTransferError,
     PortalClipboard,
     valid_mime,
@@ -19,7 +20,7 @@ class ClipboardContent:
         self.generation = None
         self.transport.request()
 
-    def offer(self, data):
+    def offer(self, data, *, expected_generation=None):
         if (
             not isinstance(data, dict)
             or not data
@@ -31,12 +32,16 @@ class ClipboardContent:
             raise ValueError(
                 "Clipboard offers may contain at most 32 formats and 1 MiB total."
             )
+        if expected_generation is not None:
+            self.transport.check_generation(expected_generation)
         self.data.clear()
         self.generation = None
         try:
             for _mime, serial in self.transport.take_transfers():
                 self.transport.reject(serial)
-            baseline = self.transport.offer(tuple(data))
+            baseline = self.transport.offer(
+                tuple(data), expected_generation=expected_generation
+            )
             deadline = time.monotonic() + 1
             while (
                 self.transport.generation <= baseline
@@ -49,6 +54,8 @@ class ClipboardContent:
                         "The desktop did not confirm clipboard ownership."
                     )
                 time.sleep(0.01)
+        except ClipboardChanged:
+            raise
         except BaseException:
             # An ambiguous ownership change must not acknowledge a later offer.
             self.close()
