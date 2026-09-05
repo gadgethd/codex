@@ -10,6 +10,7 @@ import select
 import time
 from collections import deque
 from dataclasses import dataclass
+from functools import partial
 
 from .dbus import PortalError
 
@@ -22,6 +23,10 @@ TRANSFER_TIMEOUT = 3
 
 class ClipboardTransferError(PortalError):
     """A single clipboard reader or writer failed; the session can stay open."""
+
+
+class ClipboardChanged(PortalError):
+    """The selection changed before a guarded clipboard action could run."""
 
 
 def valid_mime(value):
@@ -118,7 +123,14 @@ class PortalClipboard:
             self.transfers.popleft() for _ in range(min(limit, len(self.transfers)))
         ]
 
-    def offer(self, mime_types):
+    def check_generation(self, expected):
+        self.poll()
+        if self.generation != expected:
+            raise ClipboardChanged(
+                "The clipboard changed; paste stopped. Verify the target before retrying."
+            )
+
+    def offer(self, mime_types, *, expected_generation=None):
         if (
             not isinstance(mime_types, (list, tuple))
             or len(mime_types) > MAX_FORMATS
@@ -127,11 +139,22 @@ class PortalClipboard:
             raise ValueError("Clipboard offers need at most 32 valid MIME types.")
         self.poll()
         baseline = self.generation
+        guard = (
+            {"before_send": partial(self.check_generation, expected_generation)}
+            if expected_generation is not None
+            else {}
+        )
         self.bus.call(
             CLIPBOARD,
             "SetSelection",
             "(oa{sv})",
-            (self.session, {"mime_types": self.bus.variant("as", tuple(mime_types))}),
+            (
+                self.session,
+                {"mime_types": self.bus.variant("as", tuple(mime_types))}
+                if mime_types
+                else {},
+            ),
+            **guard,
         )
         return baseline
 

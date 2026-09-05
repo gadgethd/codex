@@ -32,6 +32,9 @@ class FakeBus(PortalBus):
 
     def call(self, interface, method, signature, values, **kwargs):
         self._check_cancelled()
+        before_send = kwargs.pop("before_send", None)
+        if before_send is not None:
+            before_send()
         self.calls.append((interface, method, signature, values, kwargs))
         if method == self.fail_method:
             raise PortalError("transport failed")

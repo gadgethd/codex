@@ -74,9 +74,19 @@ class PortalBus:
             self.cancel_event = cancelled
 
     def call(
-        self, interface, method, signature, values, *, path=None, receive_fd=False
+        self,
+        interface,
+        method,
+        signature,
+        values,
+        *,
+        path=None,
+        receive_fd=False,
+        before_send=None,
     ):
         self.poll()
+        if before_send is not None:
+            before_send()
         try:
             reply, fds = self.connection.call_with_unix_fd_list_sync(
                 self.DESTINATION,

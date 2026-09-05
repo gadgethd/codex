@@ -183,6 +183,21 @@ class PortalRequestTests(unittest.TestCase):
         self.bus.connection.close_sync.assert_called_once_with(None)
         self.assertTrue(self.bus.closed)
 
+    def test_call_precondition_runs_after_poll_and_can_prevent_sending(self):
+        self.bus.poll = lambda: self.events.append("poll")
+        self.bus.connection.call_with_unix_fd_list_sync = Mock()
+
+        def changed():
+            self.events.append("guard")
+            raise PortalError("clipboard changed")
+
+        with self.assertRaisesRegex(PortalError, "clipboard changed"):
+            PortalBus.call(
+                self.bus, "interface", "method", "()", (), before_send=changed
+            )
+        self.assertEqual(self.events, ["poll", "guard"])
+        self.bus.connection.call_with_unix_fd_list_sync.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
