@@ -1,6 +1,6 @@
-import unittest
 import os
 import threading
+import unittest
 from unittest.mock import patch
 
 from codex_linux_computer_use.dbus import PortalBus, PortalError
@@ -173,9 +173,11 @@ class PortalTests(unittest.TestCase):
                 raise PortalError("close failed")
             return original_call(*args, **kwargs)
 
-        with patch.object(self.bus, "call", side_effect=fail_close):
-            with self.assertRaisesRegex(PortalError, "close failed"):
-                self.desktop.start()
+        with (
+            patch.object(self.bus, "call", side_effect=fail_close),
+            self.assertRaisesRegex(PortalError, "close failed"),
+        ):
+            self.desktop.start()
         self.bus.fail_method = None
         self.assertEqual(self.desktop.start(), [Display(42, 1920, 1080)])
         self.assertEqual([call[1] for call in self.bus.calls].count("CreateSession"), 2)
@@ -198,7 +200,7 @@ class PortalTests(unittest.TestCase):
                 read_fd, write_fd = os.pipe()
                 os.close(write_fd)
 
-                def capture(*args):
+                def capture(*args, revoked=revoked):
                     if revoked:
                         self.bus.callbacks[1](({},))
                         return {"png": b"png", "width": 1920, "height": 1080}
@@ -210,9 +212,9 @@ class PortalTests(unittest.TestCase):
                         "codex_linux_computer_use.capture.capture_png",
                         side_effect=capture,
                     ),
+                    self.assertRaises(PortalError),
                 ):
-                    with self.assertRaises(PortalError):
-                        self.desktop.screenshot(42)
+                    self.desktop.screenshot(42)
                 with self.assertRaises(OSError):
                     os.fstat(read_fd)
 

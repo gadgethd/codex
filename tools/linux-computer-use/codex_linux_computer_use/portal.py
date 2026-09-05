@@ -4,10 +4,10 @@ This low-level backend performs only operations authorized by the portal. The
 client-facing service must additionally enforce Codex application policy.
 """
 
-from dataclasses import dataclass
 import math
 import os
 import uuid
+from dataclasses import dataclass
 
 from .dbus import PortalBus, PortalError
 
