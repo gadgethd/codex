@@ -68,6 +68,12 @@ impl BrowserUseRequirementsToml {
 }
 
 #[derive(Deserialize, Debug, Clone, Default, PartialEq, Eq)]
+pub struct ComputerUseLinuxRequirementsToml {
+    /// Application rules keyed by exact XDG desktop-file ID, including `.desktop`.
+    pub desktop_ids: Option<BTreeMap<String, AllowDenyRequirementToml>>,
+}
+
+#[derive(Deserialize, Debug, Clone, Default, PartialEq, Eq)]
 pub struct ComputerUseMacosRequirementsToml {
     pub bundle_ids: Option<BTreeMap<String, AllowDenyRequirementToml>>,
 }
@@ -91,6 +97,7 @@ pub struct ComputerUseRequirementsToml {
     pub allow_locked_computer_use: Option<bool>,
     pub allow_persistent_approval: Option<bool>,
     pub default_app_access: Option<AllowDenyRequirementToml>,
+    pub linux: Option<ComputerUseLinuxRequirementsToml>,
     pub macos: Option<ComputerUseMacosRequirementsToml>,
     pub windows: Option<ComputerUseWindowsRequirementsToml>,
 }
@@ -100,6 +107,10 @@ impl ComputerUseRequirementsToml {
         self.allow_locked_computer_use.is_none()
             && self.allow_persistent_approval.is_none()
             && self.default_app_access.is_none()
+            && self
+                .linux
+                .as_ref()
+                .is_none_or(|linux| linux.desktop_ids.as_ref().is_none_or(BTreeMap::is_empty))
             && self
                 .macos
                 .as_ref()

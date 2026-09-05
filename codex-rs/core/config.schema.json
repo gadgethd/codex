@@ -513,11 +513,27 @@
         "default_app_access": {
           "$ref": "#/definitions/AllowDenyRequirementToml"
         },
+        "linux": {
+          "$ref": "#/definitions/ComputerUseLinuxConfigToml"
+        },
         "macos": {
           "$ref": "#/definitions/ComputerUseMacosConfigToml"
         },
         "windows": {
           "$ref": "#/definitions/ComputerUseWindowsConfigToml"
+        }
+      },
+      "type": "object"
+    },
+    "ComputerUseLinuxConfigToml": {
+      "additionalProperties": false,
+      "properties": {
+        "desktop_ids": {
+          "additionalProperties": {
+            "$ref": "#/definitions/AllowDenyRequirementToml"
+          },
+          "description": "Application rules keyed by exact XDG desktop-file ID, including `.desktop`.",
+          "type": "object"
         }
       },
       "type": "object"

@@ -8,8 +8,16 @@ use std::collections::BTreeMap;
 #[schemars(deny_unknown_fields)]
 pub struct ComputerUseConfigToml {
     pub default_app_access: Option<AllowDenyRequirementToml>,
+    pub linux: Option<ComputerUseLinuxConfigToml>,
     pub macos: Option<ComputerUseMacosConfigToml>,
     pub windows: Option<ComputerUseWindowsConfigToml>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct ComputerUseLinuxConfigToml {
+    /// Application rules keyed by exact XDG desktop-file ID, including `.desktop`.
+    pub desktop_ids: Option<BTreeMap<String, AllowDenyRequirementToml>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, JsonSchema)]

@@ -372,6 +372,16 @@
             }
           ]
         },
+        "linux": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ComputerUseLinuxConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "macos": {
           "anyOf": [
             {
@@ -390,6 +400,21 @@
             {
               "type": "null"
             }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ComputerUseLinuxConfig": {
+      "properties": {
+        "desktop_ids": {
+          "additionalProperties": {
+            "$ref": "#/definitions/AllowDenyRequirement"
+          },
+          "description": "Application rules keyed by exact XDG desktop-file ID, including `.desktop`.",
+          "type": [
+            "object",
+            "null"
           ]
         }
       },

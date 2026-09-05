@@ -3,6 +3,7 @@ use super::ApprovalsReviewer;
 use super::AskForApproval;
 use super::BrowserUseConfig;
 use super::ComputerUseConfig;
+use super::ComputerUseLinuxRequirements;
 use super::SandboxMode;
 use super::WindowsSandboxSetupMode;
 use super::shared::default_enabled;
@@ -497,6 +498,7 @@ pub struct ComputerUseRequirements {
     pub allow_locked_computer_use: Option<bool>,
     pub allow_persistent_approval: Option<bool>,
     pub default_app_access: Option<AllowDenyRequirement>,
+    pub linux: Option<ComputerUseLinuxRequirements>,
     pub macos: Option<ComputerUseMacosRequirements>,
     pub windows: Option<ComputerUseWindowsRequirements>,
 }
