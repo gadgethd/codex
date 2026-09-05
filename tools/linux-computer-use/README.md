@@ -42,6 +42,28 @@ of the desktop. Lock state is checked before and after an operation, and an
 unknown state prevents access. `stop_session` remains available after policy
 changes so the client can release desktop sharing.
 
+Add the following to the fork's Codex configuration, replacing both absolute
+paths with your checkout location. The environment allowlist is required because
+stdio MCP servers do not inherit desktop connection variables by default.
+
+```toml
+[mcp_servers.linux_computer_use]
+command = "/absolute/path/to/codex/tools/linux-computer-use/.venv/bin/python"
+args = ["-m", "codex_linux_computer_use"]
+cwd = "/absolute/path/to/codex/tools/linux-computer-use"
+tool_timeout_sec = 150
+env_vars = [
+  "DBUS_SESSION_BUS_ADDRESS", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY",
+  "XDG_RUNTIME_DIR", "XDG_CURRENT_DESKTOP", "XDG_SESSION_TYPE", "PIPEWIRE_REMOTE",
+  "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME",
+]
+```
+
+Launch the Codex client from the graphical desktop session. A plain SSH session
+does not supply that desktop's connection variables. The service has been
+verified through the rebuilt Codex CLI on an isolated Fedora 44 GNOME desktop:
+host policy, session creation, one image forwarded to the model, and cleanup.
+
 Tests mock the desktop transport and do not open permission prompts:
 
 ```sh
