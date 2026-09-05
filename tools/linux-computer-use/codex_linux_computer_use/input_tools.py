@@ -55,7 +55,7 @@ def register_input_tools(server, run):
         stream: StrictInt, x: Coordinate, y: Coordinate, ctx: Context
     ) -> str:
         """Move the pointer on a shared display using its logical coordinates from start_session. Screenshot pixel dimensions can differ."""
-        await run(ctx, lambda desktop: desktop.move(stream, x, y))
+        await run(ctx, lambda desktop, check_lock: desktop.move(stream, x, y))
         return "Pointer moved."
 
     @server.tool(**options)
@@ -69,11 +69,12 @@ def register_input_tools(server, run):
     ) -> str:
         """Click at logical display coordinates. Supports one, two or three clicks and always releases the button."""
 
-        def action(desktop):
+        def action(desktop, check_lock):
             desktop.move(stream, x, y)
             for index in range(count):
                 if index:
                     time.sleep(0.08)
+                check_lock()
                 try:
                     desktop.button(BUTTONS[button], pressed=True)
                 finally:
@@ -93,7 +94,7 @@ def register_input_tools(server, run):
     ) -> str:
         """Drag the left button between two logical positions on one shared display. The button is released on success or failure."""
 
-        def action(desktop):
+        def action(desktop, check_lock):
             desktop.check_open()
             display = next((d for d in desktop.displays if d.stream == stream), None)
             if display is None:
@@ -106,9 +107,11 @@ def register_input_tools(server, run):
                     "Drag positions must be inside the display's logical dimensions."
                 )
             desktop.move(stream, start_x, start_y)
+            check_lock()
             try:
                 desktop.button(BUTTONS["left"], pressed=True)
                 for step in range(1, 13):
+                    check_lock()
                     desktop.move(
                         stream,
                         start_x + (end_x - start_x) * step / 12,
@@ -132,9 +135,11 @@ def register_input_tools(server, run):
     ) -> str:
         """Scroll at logical display coordinates by at most 100 steps per axis. Positive vertical scrolls down; positive horizontal scrolls right."""
 
-        def action(desktop):
+        def action(desktop, check_lock):
             desktop.move(stream, x, y)
-            desktop.scroll(vertical=vertical, horizontal=horizontal)
+            for axis in ({"vertical": vertical}, {"horizontal": horizontal}):
+                check_lock()
+                desktop.scroll(**axis)
 
         await run(ctx, action)
         return "Scroll completed."
@@ -143,7 +148,7 @@ def register_input_tools(server, run):
     async def press_key(keys: Chord, ctx: Context) -> str:
         """Press and release a keyboard chord in the listed order, such as ["CTRL", "a"] or ["ENTER"]. Supports printable ASCII keys, CTRL, SHIFT, ALT, SUPER, navigation keys, ESC, TAB, BACKSPACE, DELETE and F1-F24."""
 
-        def action(desktop):
+        def action(desktop, check_lock):
             symbols = []
             for key in keys:
                 symbol = KEYS.get(key.upper())
@@ -154,6 +159,7 @@ def register_input_tools(server, run):
                 symbols.append(symbol)
             with ExitStack() as release:
                 for symbol in symbols:
+                    check_lock()
                     release.callback(desktop.keysym, symbol, pressed=False)
                     desktop.keysym(symbol, pressed=True)
 

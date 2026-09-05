@@ -267,6 +267,60 @@ class InputToolsTests(unittest.IsolatedAsyncioTestCase):
                     self.lock_check.return_value = False
                     self.assertEqual(self.bus.calls, [])
 
+    async def test_lock_during_gesture_stops_new_input_but_releases_held_keys(self):
+        original = self.bus.call
+
+        def lock_after_press(interface, method, signature, values, **kwargs):
+            result = original(interface, method, signature, values, **kwargs)
+            if (
+                method in ("NotifyPointerButton", "NotifyKeyboardKeysym")
+                and values[3] == 1
+            ):
+                self.lock_check.return_value = True
+            return result
+
+        async with Client(self.server) as client:
+            for name, args, first_event in [
+                (
+                    "press_key",
+                    {"keys": ["CTRL", "a"]},
+                    ("NotifyKeyboardKeysym", 0xFFE3),
+                ),
+                (
+                    "click",
+                    {"stream": 42, "x": 10, "y": 20, "count": 2},
+                    ("NotifyPointerButton", 272),
+                ),
+                (
+                    "drag",
+                    {
+                        "stream": 42,
+                        "start_x": 10,
+                        "start_y": 20,
+                        "end_x": 130,
+                        "end_y": 80,
+                    },
+                    ("NotifyPointerButton", 272),
+                ),
+            ]:
+                with self.subTest(name=name):
+                    self.bus.calls.clear()
+                    self.lock_check.return_value = False
+                    with patch.object(self.bus, "call", side_effect=lock_after_press):
+                        result = await client.call_tool(name, args, meta=self.meta)
+                    self.assertTrue(result.is_error)
+                    method, code = first_event
+                    prefix = (
+                        []
+                        if name == "press_key"
+                        else [("NotifyPointerMotionAbsolute", (42, 10.0, 20.0))]
+                    )
+                    self.assertEqual(
+                        self.events(),
+                        [*prefix, (method, (code, 1)), (method, (code, 0))],
+                    )
+                    self.assertEqual(self.desktop.pressed, {})
+
 
 if __name__ == "__main__":
     unittest.main()
