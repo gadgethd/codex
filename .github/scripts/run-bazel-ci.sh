@@ -101,7 +101,7 @@ print_bazel_test_log_tails() {
   # mode can make `bazel info` fail, which would hide the real test log path.
   for arg in "${post_config_bazel_args[@]}"; do
     case "$arg" in
-      --host_platform=* | --repo_contents_cache=* | --repository_cache=*)
+      --host_platform=* | --platforms=* | --repo_contents_cache=* | --repository_cache=*)
         bazel_info_args+=("$arg")
         ;;
     esac
@@ -256,8 +256,8 @@ if [[ ${#bazel_args[@]} -eq 0 || ${#bazel_targets[@]} -eq 0 ]]; then
 fi
 
 if [[ "${RUNNER_OS:-}" == "Windows" && $windows_cross_compile -eq 1 && -z "${BUILDBUDDY_API_KEY:-}" ]]; then
-  # Windows cross-compilation depends on authenticated RBE. Preserve the local
-  # Windows build shape when credentials are unavailable.
+  # Without RBE, use native MSVC host tools while retaining the GNU target ABI
+  # used by hermetic LLVM and native dependencies such as AWS-LC.
   ci_config=ci-windows
   windows_msvc_host_platform=1
 fi
@@ -300,9 +300,30 @@ if [[ "${RUNNER_OS:-}" == "Windows" && $windows_cross_compile -eq 1 && -n "${BUI
 fi
 
 if [[ "${RUNNER_OS:-}" == "Windows" && $windows_cross_compile -eq 1 && -z "${BUILDBUDDY_API_KEY:-}" ]]; then
-  # The Windows cross-compile config depends on authenticated remote
-  # execution. When credentials are unavailable, keep the local build shape
-  # and its lower concurrency cap.
+  has_target_platform_override=0
+  target_platform=//:windows_x86_64_gnullvm
+  next_is_target_platform=0
+  for arg in "${bazel_args[@]}"; do
+    if [[ $next_is_target_platform -eq 1 ]]; then
+      target_platform="$arg"
+      next_is_target_platform=0
+    elif [[ "$arg" == --platforms=* ]]; then
+      target_platform="${arg#--platforms=}"
+      has_target_platform_override=1
+    elif [[ "$arg" == --platforms ]]; then
+      has_target_platform_override=1
+      next_is_target_platform=1
+    fi
+  done
+  if [[ $has_target_platform_override -eq 0 ]]; then
+    post_config_bazel_args+=(--platforms=//:windows_x86_64_gnullvm)
+  fi
+  if [[ "$target_platform" == //:windows_x86_64_gnullvm || "$target_platform" == //:local_windows ]]; then
+    post_config_bazel_args+=(
+      --config=windows-gnullvm-tests
+      --extra_toolchains=//:windows_gnullvm_tests_on_msvc_host_toolchain
+    )
+  fi
   post_config_bazel_args+=(--jobs=8)
 fi
 
