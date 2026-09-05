@@ -69,6 +69,37 @@ class InputToolsTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertEqual(self.desktop.pressed, {})
 
+    async def test_drag_interpolates_and_releases_button(self):
+        with patch("codex_linux_computer_use.input_tools.time.sleep"):
+            async with Client(self.server) as client:
+                result = await client.call_tool(
+                    "drag",
+                    {
+                        "stream": 42,
+                        "start_x": 10,
+                        "start_y": 20,
+                        "end_x": 130,
+                        "end_y": 80,
+                    },
+                    meta=self.meta,
+                )
+                self.assertFalse(result.is_error, result.content)
+                self.assertEqual(
+                    self.events(),
+                    [
+                        ("NotifyPointerMotionAbsolute", (42, 10.0, 20.0)),
+                        ("NotifyPointerButton", (272, 1)),
+                        *[
+                            (
+                                "NotifyPointerMotionAbsolute",
+                                (42, 10.0 + step * 10, 20.0 + step * 5),
+                            )
+                            for step in range(1, 13)
+                        ],
+                        ("NotifyPointerButton", (272, 0)),
+                    ],
+                )
+
     async def test_chord_releases_all_modifiers_after_ambiguous_press_failure(self):
         original = self.bus.call
 
@@ -107,6 +138,16 @@ class InputToolsTests(unittest.IsolatedAsyncioTestCase):
                 ("click", {"stream": 42, "x": 10, "y": 20, "count": 2.0}),
                 ("click", {"stream": 42, "x": 10, "y": 20, "button": "invalid"}),
                 ("scroll", {"stream": 42, "x": 10, "y": 20, "horizontal": 101}),
+                (
+                    "drag",
+                    {
+                        "stream": 42,
+                        "start_x": 1,
+                        "start_y": 2,
+                        "end_x": 1920,
+                        "end_y": 2,
+                    },
+                ),
             ]:
                 with self.subTest(name=name, args=args):
                     result = await client.call_tool(name, args, meta=self.meta)
@@ -118,6 +159,17 @@ class InputToolsTests(unittest.IsolatedAsyncioTestCase):
         async with Client(self.server) as client:
             for name, args, failure_method in [
                 ("click", {"stream": 42, "x": 10, "y": 20}, "NotifyPointerButton"),
+                (
+                    "drag",
+                    {
+                        "stream": 42,
+                        "start_x": 10,
+                        "start_y": 20,
+                        "end_x": 130,
+                        "end_y": 80,
+                    },
+                    "NotifyPointerMotionAbsolute",
+                ),
             ]:
                 self.bus.calls.clear()
 
@@ -144,7 +196,7 @@ class InputToolsTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(self.events()[-1], ("NotifyPointerButton", (272, 0)))
                 self.assertEqual(self.desktop.pressed, {})
 
-    async def test_cancelled_click_releases_input_and_stops_sharing(self):
+    async def test_cancelled_drag_releases_input_and_stops_sharing(self):
         loop = asyncio.get_running_loop()
         pressed = asyncio.Event()
         original = self.bus.call
@@ -159,8 +211,14 @@ class InputToolsTests(unittest.IsolatedAsyncioTestCase):
             async with Client(self.server) as client:
                 task = asyncio.create_task(
                     client.call_tool(
-                        "click",
-                        {"stream": 42, "x": 10, "y": 20, "count": 3},
+                        "drag",
+                        {
+                            "stream": 42,
+                            "start_x": 10,
+                            "start_y": 20,
+                            "end_x": 130,
+                            "end_y": 80,
+                        },
                         meta=self.meta,
                     )
                 )
@@ -184,6 +242,16 @@ class InputToolsTests(unittest.IsolatedAsyncioTestCase):
                 ("move_pointer", {"stream": 42, "x": 10, "y": 20}),
                 ("click", {"stream": 42, "x": 10, "y": 20}),
                 ("scroll", {"stream": 42, "x": 10, "y": 20, "vertical": 1}),
+                (
+                    "drag",
+                    {
+                        "stream": 42,
+                        "start_x": 1,
+                        "start_y": 2,
+                        "end_x": 10,
+                        "end_y": 20,
+                    },
+                ),
                 ("press_key", {"keys": ["ENTER"]}),
             ]:
                 with self.subTest(name=name):
@@ -223,6 +291,17 @@ class InputToolsTests(unittest.IsolatedAsyncioTestCase):
                     {"stream": 42, "x": 10, "y": 20, "count": 2},
                     ("NotifyPointerButton", 272),
                 ),
+                (
+                    "drag",
+                    {
+                        "stream": 42,
+                        "start_x": 10,
+                        "start_y": 20,
+                        "end_x": 130,
+                        "end_y": 80,
+                    },
+                    ("NotifyPointerButton", 272),
+                ),
             ]:
                 with self.subTest(name=name):
                     self.bus.calls.clear()
@@ -241,6 +320,40 @@ class InputToolsTests(unittest.IsolatedAsyncioTestCase):
                         [*prefix, (method, (code, 1)), (method, (code, 0))],
                     )
                     self.assertEqual(self.desktop.pressed, {})
+
+    async def test_cancelled_click_releases_input_and_stops_sharing(self):
+        loop = asyncio.get_running_loop()
+        pressed = asyncio.Event()
+        original = self.bus.call
+
+        def signal_press(interface, method, signature, values, **kwargs):
+            result = original(interface, method, signature, values, **kwargs)
+            if method == "NotifyPointerButton" and values[3] == 1:
+                loop.call_soon_threadsafe(pressed.set)
+            return result
+
+        with patch.object(self.bus, "call", side_effect=signal_press):
+            async with Client(self.server) as client:
+                task = asyncio.create_task(
+                    client.call_tool(
+                        "click",
+                        {"stream": 42, "x": 10, "y": 20, "count": 3},
+                        meta=self.meta,
+                    )
+                )
+                await asyncio.wait_for(pressed.wait(), 2)
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+
+                async def cleaned():
+                    while self.runtime.busy:
+                        await asyncio.sleep(0.005)
+
+                await asyncio.wait_for(cleaned(), 2)
+                self.assertEqual(
+                    (self.desktop.pressed, self.desktop.session), ({}, None)
+                )
 
 
 if __name__ == "__main__":
