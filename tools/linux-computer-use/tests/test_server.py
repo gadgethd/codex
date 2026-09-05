@@ -55,7 +55,16 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
                 tools = await client.list_tools()
                 self.assertEqual(
                     [tool.name for tool in tools.tools],
-                    ["start_session", "screenshot", "stop_session"],
+                    [
+                        "start_session",
+                        "screenshot",
+                        "stop_session",
+                        "move_pointer",
+                        "click",
+                        "drag",
+                        "scroll",
+                        "press_key",
+                    ],
                 )
                 started = await client.call_tool(
                     "start_session", meta={POLICY_KEY: self.policy}

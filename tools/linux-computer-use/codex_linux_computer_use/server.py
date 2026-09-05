@@ -10,6 +10,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 from .dbus import PortalError
+from .input_tools import register_input_tools
 from .policy import LinuxPolicy
 from .portal import PortalDesktop
 from .runtime import DesktopRuntime
@@ -83,4 +84,5 @@ def create_server(runtime_factory=DesktopRuntime):
             raise ToolError(str(error)[:512]) from error
         return "Desktop sharing stopped."
 
+    register_input_tools(server, run)
     return server
