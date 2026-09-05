@@ -13,7 +13,16 @@ use futures::future::BoxFuture;
 use pretty_assertions::assert_eq;
 use rmcp::ServerHandler;
 use rmcp::ServiceExt;
-use rmcp::model::*;
+use rmcp::model::CallToolRequestParams;
+use rmcp::model::CallToolResponse;
+use rmcp::model::CallToolResult;
+use rmcp::model::ClientCapabilities;
+use rmcp::model::Implementation;
+use rmcp::model::InitializeRequestParams;
+use rmcp::model::MetaObject;
+use rmcp::model::ServerCapabilities;
+use rmcp::model::ServerInfo;
+use rmcp::model::Tool;
 use rmcp::service::RequestContext;
 use rmcp::service::RoleServer;
 use serde_json::json;
@@ -116,7 +125,7 @@ impl InProcessTransportFactory for RecordingServer {
     fn open(&self) -> BoxFuture<'static, std::io::Result<DuplexStream>> {
         let server = self.clone();
         async move {
-            let (client, transport) = tokio::io::duplex(4096);
+            let (client, transport) = tokio::io::duplex(/*max_buf_size*/ 4096);
             tokio::spawn(async move {
                 server
                     .serve(transport)
@@ -145,7 +154,7 @@ async fn prepared_calls_replace_forged_metadata_only_for_native_stdio_tools() ->
                 ClientCapabilities::default(),
                 Implementation::new("test", "1"),
             ),
-            Some(Duration::from_secs(5)),
+            Some(Duration::from_secs(/*secs*/ 5)),
             Box::new(|_, _| async { anyhow::bail!("unexpected elicitation") }.boxed()),
         )
         .await?;
@@ -198,7 +207,7 @@ async fn prepared_calls_replace_forged_metadata_only_for_native_stdio_tools() ->
             Arc::clone(&managed_client),
             Arc::clone(&config),
             /*catalog_revision*/ 0,
-            Arc::new(RwLock::new(0)),
+            Arc::new(RwLock::new(/*value*/ 0)),
             tool.clone(),
             McpServerMetadata {
                 environment_id: "local".to_string(),
@@ -216,7 +225,7 @@ async fn prepared_calls_replace_forged_metadata_only_for_native_stdio_tools() ->
             .call(
                 /*arguments*/ None,
                 Some(json!({POLICY_KEY: {"enabled": true}, "caller": "preserved"})),
-                Some(Duration::from_secs(5)),
+                Some(Duration::from_secs(/*secs*/ 5)),
             )
             .await?;
     }

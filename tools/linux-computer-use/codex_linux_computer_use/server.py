@@ -32,9 +32,7 @@ def create_server(runtime_factory=DesktopRuntime):
     async def run(ctx, action):
         try:
             meta = ctx.request_context.meta
-            policy = LinuxPolicy.from_meta(
-                meta.model_dump() if meta is not None else None
-            )
+            policy = LinuxPolicy.from_meta(meta)
             policy.require_desktop()
 
             def guarded(desktop):
@@ -66,8 +64,11 @@ def create_server(runtime_factory=DesktopRuntime):
     )
     async def screenshot(stream: int, ctx: Context) -> list:
         """Capture a shared monitor as PNG, at most 2048 pixels on its longest edge. Call start_session first. Coordinates for input use the display's logical dimensions."""
-        png, width, height = await run(ctx, lambda desktop: desktop.screenshot(stream))
-        return [f"PNG dimensions: {width}x{height}.", Image(data=png, format="png")]
+        frame = await run(ctx, lambda desktop: desktop.screenshot(stream))
+        return [
+            f"PNG dimensions: {frame['width']}x{frame['height']}.",
+            Image(data=frame["png"], format="png"),
+        ]
 
     @server.tool(
         annotations=ToolAnnotations(

@@ -1,14 +1,16 @@
 import base64
+import os
+import sys
 import unittest
+from pathlib import Path
 from unittest.mock import patch
-
-from mcp import Client
-from mcp.types import ImageContent, TextContent
 
 from codex_linux_computer_use.dbus import PortalError
 from codex_linux_computer_use.policy import POLICY_KEY
 from codex_linux_computer_use.portal import PortalDesktop
 from codex_linux_computer_use.server import create_server
+from mcp import Client, StdioServerParameters
+from mcp.types import ImageContent, TextContent
 from test_portal import FakeBus
 
 PNG = base64.b64decode(
@@ -45,7 +47,10 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(self.lock.stop)
 
     async def test_protocol_session_capture_and_cleanup(self):
-        with patch.object(self.runtime.desktop, "screenshot", return_value=(PNG, 1, 1)):
+        with patch(
+            "codex_linux_computer_use.capture.capture_png",
+            return_value={"png": PNG, "width": 1, "height": 1},
+        ):
             async with Client(self.server) as client:
                 tools = await client.list_tools()
                 self.assertEqual(
@@ -60,9 +65,16 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
                     started.structured_content,
                     {"result": [{"stream": 42, "width": 1920, "height": 1080}]},
                 )
-                result = await client.call_tool(
-                    "screenshot", {"stream": 42}, meta={POLICY_KEY: self.policy}
-                )
+                read_fd, write_fd = os.pipe()
+                os.close(write_fd)
+                with patch.object(
+                    self.runtime.desktop.bus, "call", return_value=read_fd
+                ):
+                    result = await client.call_tool(
+                        "screenshot", {"stream": 42}, meta={POLICY_KEY: self.policy}
+                    )
+                with self.assertRaises(OSError):
+                    os.fstat(read_fd)
                 self.assertFalse(result.is_error)
                 self.assertEqual(
                     result.content,
@@ -82,21 +94,31 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_missing_invalid_or_restrictive_policy_never_opens_desktop(self):
         policies = [
-            None,
-            {},
-            {**self.policy, "version": True},
-            {**self.policy, "enabled": False},
-            {**self.policy, "defaultAppAccess": "deny"},
-            {**self.policy, "desktopIds": {"private.desktop": "deny"}},
-            {**self.policy, "desktopIds": {str(n): "allow" for n in range(257)}},
+            (None, "requires Linux policy metadata"),
+            ({}, "requires Linux policy metadata"),
+            ({**self.policy, "version": True}, "requires Linux policy metadata"),
+            ({**self.policy, "enabled": False}, "disabled by Codex policy"),
+            (
+                {**self.policy, "defaultAppAccess": "deny"},
+                "under this application policy",
+            ),
+            (
+                {**self.policy, "desktopIds": {"private.desktop": "deny"}},
+                "under this application policy",
+            ),
+            (
+                {**self.policy, "desktopIds": {str(n): "allow" for n in range(257)}},
+                "invalid Linux computer-use policy",
+            ),
         ]
         async with Client(self.server) as client:
-            for policy in policies:
+            for policy, message in policies:
                 with self.subTest(policy=policy):
                     result = await client.call_tool(
                         "start_session", meta={POLICY_KEY: policy}
                     )
                     self.assertTrue(result.is_error)
+                    self.assertIn(message, result.content[0].text)
                     self.assertLess(len(result.content[0].text), 700)
             forged = await client.call_tool("start_session", {"policy": self.policy})
             self.assertTrue(forged.is_error)
@@ -114,7 +136,9 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(result.is_error)
             self.lock_check.side_effect = [False, True]
             with patch.object(
-                self.runtime.desktop, "screenshot", return_value=(PNG, 1, 1)
+                self.runtime.desktop,
+                "screenshot",
+                return_value={"png": PNG, "width": 1, "height": 1},
             ):
                 result = await client.call_tool(
                     "screenshot", {"stream": 42}, meta={POLICY_KEY: self.policy}
@@ -136,6 +160,19 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
             result = await client.call_tool("stop_session")
             self.assertFalse(result.is_error)
         self.assertIsNone(self.runtime.desktop.session)
+
+    async def test_stdio_entry_point_exposes_tools_and_rejects_missing_host_policy(
+        self,
+    ):
+        transport = StdioServerParameters(
+            command=sys.executable,
+            args=["-m", "codex_linux_computer_use"],
+            cwd=Path(__file__).resolve().parents[1],
+        )
+        async with Client(transport, read_timeout_seconds=10) as client:
+            result = await client.call_tool("start_session")
+            self.assertTrue(result.is_error)
+            self.assertIn("requires Linux policy metadata", result.content[0].text)
 
 
 if __name__ == "__main__":
