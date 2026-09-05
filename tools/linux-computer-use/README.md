@@ -1,10 +1,10 @@
 # Native Linux computer use
 
 This directory is the native Linux implementation being developed in
-[gadgethd/codex#1](https://github.com/gadgethd/codex/issues/1). This stage adds
-native Wayland monitor capture to desktop sessions. Application policy and the MCP
-service follow separately; this library alone does
-not expose computer-use tools to Codex.
+[gadgethd/codex#1](https://github.com/gadgethd/codex/issues/1). The stdio MCP service
+exposes Wayland session creation, monitor screenshots and session cleanup. Native
+input is implemented in the underlying library; MCP input tools, application
+targeting and additional desktop backends are still in development.
 
 The transport subscribes before sending requests so immediate permission replies
 are not lost. Requests have bounded timeouts and close outstanding desktop
@@ -23,11 +23,52 @@ GStreamer runs in a separate process with a twelve-second deadline covering
 startup, capture and shutdown. A stalled pipeline is terminated and reaped so
 the desktop runtime can report an error and still close its session.
 
-Tests use only the Python standard library and do not open desktop prompts:
+Create an environment with access to the distribution's desktop bindings and
+install the MCP dependency:
 
 ```sh
 cd tools/linux-computer-use
-PYTHONPATH=. python3 -m unittest discover -s tests -v
+python3 -m venv --system-site-packages .venv
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+Run the service with `.venv/bin/python -m codex_linux_computer_use` from this
+directory. The Codex host must support the `codex/linuxComputerUsePolicy` request
+metadata used by this fork. Tools reject missing or invalid policy; supplying
+policy as a tool argument cannot grant access. Each call combines user and
+managed restrictions from the host's captured configuration. Full-monitor
+capture is unavailable if application restrictions would require masking parts
+of the desktop. Lock state is checked before and after an operation, and an
+unknown state prevents access. `stop_session` remains available after policy
+changes so the client can release desktop sharing.
+
+Add the following to the fork's Codex configuration, replacing both absolute
+paths with your checkout location. The environment allowlist is required because
+stdio MCP servers do not inherit desktop connection variables by default.
+
+```toml
+[mcp_servers.linux_computer_use]
+command = "/absolute/path/to/codex/tools/linux-computer-use/.venv/bin/python"
+args = ["-m", "codex_linux_computer_use"]
+cwd = "/absolute/path/to/codex/tools/linux-computer-use"
+tool_timeout_sec = 150
+env_vars = [
+  "DBUS_SESSION_BUS_ADDRESS", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY",
+  "XDG_RUNTIME_DIR", "XDG_CURRENT_DESKTOP", "XDG_SESSION_TYPE", "PIPEWIRE_REMOTE",
+  "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME",
+]
+```
+
+Launch the Codex client from the graphical desktop session. A plain SSH session
+does not supply that desktop's connection variables. The service has been
+verified through the rebuilt Codex CLI on an isolated Fedora 44 GNOME desktop:
+host policy, session creation, one image forwarded to the model, and cleanup.
+
+Tests mock the desktop transport and do not open permission prompts:
+
+```sh
+cd tools/linux-computer-use
+PYTHONPATH=. .venv/bin/python -m unittest discover -s tests -v
 ```
 
 `PortalDesktop.start()` negotiates a combined capture/input session and returns
