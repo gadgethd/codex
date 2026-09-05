@@ -1,0 +1,35 @@
+name: Linux computer use
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - tools/linux-computer-use/**
+      - .github/workflows/linux-computer-use.yml
+  pull_request:
+    paths:
+      - tools/linux-computer-use/**
+      - .github/workflows/linux-computer-use.yml
+
+permissions:
+  contents: read
+
+jobs:
+  protocol-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        python: ['3.10', '3.14']
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Test Linux desktop protocol and lifecycle
+        working-directory: tools/linux-computer-use
+        env:
+          PYTHONPATH: .
+        run: python -m unittest discover -s tests -v
