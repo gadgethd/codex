@@ -80,12 +80,12 @@ class PortalDesktop:
             )
         self._input("NotifyPointerButton", button, pressed)
 
-    def keysym(self, keysym, *, pressed):
+    def keysym(self, keysym, *, pressed, before_send=None):
         if type(keysym) is not int or not 0 < keysym <= 0x1FFFFFFF:
             raise ValueError("Invalid keyboard keysym.")
-        self._input("NotifyKeyboardKeysym", keysym, pressed)
+        self._input("NotifyKeyboardKeysym", keysym, pressed, before_send=before_send)
 
-    def _input(self, method, code, pressed):
+    def _input(self, method, code, pressed, *, before_send=None):
         self.check_open()
         if type(pressed) is not bool:
             raise ValueError("pressed must be a boolean.")
@@ -94,7 +94,11 @@ class PortalDesktop:
         if pressed:
             self.pressed[(method, code)] = None
         self.bus.call(
-            REMOTE, method, "(oa{sv}iu)", (self.session, {}, code, int(pressed))
+            REMOTE,
+            method,
+            "(oa{sv}iu)",
+            (self.session, {}, code, int(pressed)),
+            **({"before_send": before_send} if before_send is not None else {}),
         )
         if not pressed:
             self.pressed.pop((method, code), None)

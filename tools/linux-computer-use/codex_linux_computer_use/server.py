@@ -8,9 +8,11 @@ from mcp.server import MCPServer
 from mcp.server.mcpserver import Context, Image
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
+from pydantic import StrictBool
 
 from .dbus import PortalError
 from .input_tools import register_input_tools
+from .paste_tools import register_paste_tools
 from .policy import LinuxPolicy
 from .portal import PortalDesktop
 from .runtime import DesktopRuntime
@@ -57,9 +59,11 @@ def create_server(runtime_factory=DesktopRuntime):
             readOnlyHint=False, destructiveHint=False, openWorldHint=False
         ),
     )
-    async def start_session(ctx: Context) -> list[dict]:
-        """Ask the Linux desktop to share monitors and allow native input. The user controls the desktop permission dialog. Returns stream IDs and logical dimensions for subsequent calls."""
-        displays = await run(ctx, lambda desktop, check_lock: desktop.start())
+    async def start_session(ctx: Context, clipboard: StrictBool = False) -> list[dict]:
+        """Ask the Linux desktop to share monitors and allow native input. Set clipboard=true to enable Unicode paste. The user controls the desktop permission dialog. Returns stream IDs and logical dimensions for subsequent calls."""
+        displays = await run(
+            ctx, lambda desktop, check_lock: desktop.start(clipboard=clipboard)
+        )
         return [asdict(display) for display in displays]
 
     @server.tool(
@@ -88,4 +92,5 @@ def create_server(runtime_factory=DesktopRuntime):
         return "Desktop sharing stopped."
 
     register_input_tools(server, run)
+    register_paste_tools(server, run)
     return server
