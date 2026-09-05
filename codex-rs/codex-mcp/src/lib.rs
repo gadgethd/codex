@@ -101,6 +101,7 @@ pub(crate) mod binding_clients;
 mod catalog;
 mod client_capabilities;
 pub(crate) mod codex_apps;
+mod computer_use_policy;
 pub(crate) mod connection_manager;
 pub(crate) mod elicitation;
 mod event_stream;

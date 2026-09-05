@@ -953,6 +953,7 @@ impl McpConnectionSet {
         // Direct callers cannot supply host-owned entitlement metadata, even for unlisted tools.
         if let Some(serde_json::Value::Object(meta)) = meta.as_mut() {
             meta.remove(ENTITLEMENT_CONTEXT_KEY);
+            meta.remove(crate::computer_use_policy::POLICY_KEY);
         }
         let result: rmcp::model::CallToolResult = client
             .client
