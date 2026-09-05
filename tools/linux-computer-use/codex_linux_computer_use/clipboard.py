@@ -20,6 +20,10 @@ MAX_TRANSFERS = 32
 TRANSFER_TIMEOUT = 3
 
 
+class ClipboardTransferError(PortalError):
+    """A single clipboard reader or writer failed; the session can stay open."""
+
+
 def valid_mime(value):
     return (
         isinstance(value, str)
@@ -42,6 +46,7 @@ class PortalClipboard:
         self.generation = 0
         self.transfers = deque()
         self.pending = set()
+        self.transfer_generations = {}
         self.subscriptions = []
         self.failure = None
         self.closed = False
@@ -67,7 +72,7 @@ class PortalClipboard:
         if self.closed or session != self.session:
             return
         formats = options.get("mime_types", [])
-        owner = options.get("session_is_owner")
+        owner = options.get("session_is_owner", False if not formats else None)
         if (
             not isinstance(formats, (list, tuple))
             or len(formats) > MAX_FORMATS
@@ -93,20 +98,25 @@ class PortalClipboard:
             self.failure = "The desktop exceeded clipboard transfer limits."
             return
         self.pending.add(serial)
+        self.transfer_generations[serial] = self.generation
         self.transfers.append((mime, serial))
 
     def poll(self):
         if self.closed:
             raise PortalError("The clipboard transport is closed.")
         self.bus.poll()
+        if self.closed:
+            raise PortalError("The clipboard transport is closed.")
         if self.failure:
             raise PortalError(self.failure)
 
-    def take_transfers(self):
+    def take_transfers(self, *, limit=MAX_TRANSFERS):
+        if type(limit) is not int or not 1 <= limit <= MAX_TRANSFERS:
+            raise ValueError("Clipboard transfer batch must be between 1 and 32.")
         self.poll()
-        transfers = list(self.transfers)
-        self.transfers.clear()
-        return transfers
+        return [
+            self.transfers.popleft() for _ in range(min(limit, len(self.transfers)))
+        ]
 
     def offer(self, mime_types):
         if (
@@ -116,12 +126,14 @@ class PortalClipboard:
         ):
             raise ValueError("Clipboard offers need at most 32 valid MIME types.")
         self.poll()
+        baseline = self.generation
         self.bus.call(
             CLIPBOARD,
             "SetSelection",
             "(oa{sv})",
             (self.session, {"mime_types": self.bus.variant("as", tuple(mime_types))}),
         )
+        return baseline
 
     def read(self, mime):
         if not valid_mime(mime):
@@ -140,13 +152,18 @@ class PortalClipboard:
         success = False
         try:
             self.poll()
-            fd = self.bus.call(
-                CLIPBOARD,
-                "SelectionWrite",
-                "(ou)",
-                (self.session, serial),
-                receive_fd=True,
-            )
+            try:
+                fd = self.bus.call(
+                    CLIPBOARD,
+                    "SelectionWrite",
+                    "(ou)",
+                    (self.session, serial),
+                    receive_fd=True,
+                )
+            except PortalError as error:
+                # The desktop can expire a request before we open its pipe.
+                # A failed completion below still surfaces a broken session.
+                raise ClipboardTransferError(str(error)) from error
             self._transfer_bytes(fd, data)
             success = True
         finally:
@@ -158,17 +175,18 @@ class PortalClipboard:
         self._complete(serial, False)
 
     def _complete(self, serial, success):
-        try:
-            with self.bus.cleanup():
-                self.bus.call(
-                    CLIPBOARD,
-                    "SelectionWriteDone",
-                    "(oub)",
-                    (self.session, serial, success),
-                )
-        finally:
-            self.pending.discard(serial)
-            self.transfers = deque(item for item in self.transfers if item[1] != serial)
+        if serial not in self.pending:
+            return
+        self.pending.remove(serial)
+        self.transfer_generations.pop(serial, None)
+        self.transfers = deque(item for item in self.transfers if item[1] != serial)
+        with self.bus.cleanup():
+            self.bus.call(
+                CLIPBOARD,
+                "SelectionWriteDone",
+                "(oub)",
+                (self.session, serial, success),
+            )
 
     def _transfer_bytes(self, fd, data):
         reading = data is None
@@ -182,7 +200,7 @@ class PortalClipboard:
             while reading or offset < len(data):
                 self.poll()
                 if time.monotonic() >= deadline:
-                    raise PortalError("Clipboard data transfer timed out.")
+                    raise ClipboardTransferError("Clipboard data transfer timed out.")
                 if not poller.poll(50):
                     continue
                 try:
@@ -192,7 +210,9 @@ class PortalClipboard:
                             return bytes(result)
                         result.extend(chunk)
                         if len(result) > MAX_BYTES:
-                            raise PortalError("Clipboard content exceeds 1 MiB.")
+                            raise ClipboardTransferError(
+                                "Clipboard content exceeds 1 MiB."
+                            )
                     else:
                         offset += os.write(
                             fd, memoryview(data)[offset : offset + 65536]
@@ -200,13 +220,15 @@ class PortalClipboard:
                 except BlockingIOError:
                     continue
         except OSError as error:
-            raise PortalError(
+            raise ClipboardTransferError(
                 f"Clipboard data transfer failed: {error.strerror}"
             ) from error
         finally:
             os.close(fd)
 
     def close(self):
+        if self.closed:
+            return
         self.closed = True
         for serial in list(self.pending):
             try:
@@ -218,5 +240,6 @@ class PortalClipboard:
             self.bus.unsubscribe(subscription)
         self.subscriptions.clear()
         self.pending.clear()
+        self.transfer_generations.clear()
         self.transfers.clear()
         self.selection = None

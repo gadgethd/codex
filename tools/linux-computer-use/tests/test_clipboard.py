@@ -7,6 +7,7 @@ from unittest.mock import patch
 from codex_linux_computer_use.clipboard import (
     CLIPBOARD,
     MAX_BYTES,
+    ClipboardTransferError,
     PortalClipboard,
     Selection,
 )
@@ -18,13 +19,15 @@ class ClipboardBus(FakeBus):
     def __init__(self):
         super().__init__()
         self.descriptors = {}
+        self.next_subscription = 0
 
     def call(self, interface, method, *args, **kwargs):
         result = super().call(interface, method, *args, **kwargs)
         return self.descriptors.pop(method, result)
 
     def subscribe(self, interface, signal, path, callback):
-        subscription = len(self.callbacks) + 1
+        self.next_subscription += 1
+        subscription = self.next_subscription
         self.callbacks[subscription] = (signal, callback)
         return subscription
 
@@ -166,6 +169,80 @@ class ClipboardTests(unittest.TestCase):
         self.assertEqual(
             (self.clipboard.pending, self.clipboard.take_transfers()), (set(), [])
         )
+
+    def test_empty_owner_signal_clears_previous_selection(self):
+        self.bus.emit(
+            "SelectionOwnerChanged",
+            "/session/codex",
+            {
+                "mime_types": ["text/plain"],
+                "session_is_owner": True,
+            },
+        )
+        self.bus.emit("SelectionOwnerChanged", "/session/codex", {})
+        self.clipboard.poll()
+        self.assertEqual(
+            (self.clipboard.selection, self.clipboard.generation),
+            (Selection((), False), 2),
+        )
+
+    def test_transfer_generations_survive_bounded_batch_reads(self):
+        self.bus.emit("SelectionTransfer", "/session/codex", "text/plain", 20)
+        self.bus.emit("SelectionOwnerChanged", "/session/codex", {})
+        self.bus.emit("SelectionTransfer", "/session/codex", "text/plain", 21)
+        self.assertEqual(self.clipboard.take_transfers(limit=1), [("text/plain", 20)])
+        self.assertEqual(self.clipboard.transfer_generations, {20: 0, 21: 1})
+        self.clipboard.reject(20)
+        self.assertEqual(self.clipboard.take_transfers(), [("text/plain", 21)])
+        self.assertEqual(self.clipboard.transfer_generations, {21: 1})
+
+    def test_close_during_transfer_poll_stops_bytes_and_completes_once(self):
+        read_fd, write_fd = os.pipe()
+        self.addCleanup(os.close, read_fd)
+        self.bus.emit("SelectionTransfer", "/session/codex", "text/plain", 22)
+        self.bus.descriptors["SelectionWrite"] = write_fd
+        original = os.set_blocking
+
+        def revoke_on_next_poll(fd, blocking):
+            original(fd, blocking)
+            self.bus.poll = self.clipboard.close
+
+        with (
+            patch("os.set_blocking", side_effect=revoke_on_next_poll),
+            self.assertRaisesRegex(PortalError, "closed"),
+        ):
+            self.clipboard.write(22, b"must not write after revocation")
+        self.assertEqual(os.read(read_fd, 1024), b"")
+        self.assertEqual(
+            [call[3] for call in self.bus.calls if call[1] == "SelectionWriteDone"],
+            [("/session/codex", 22, False)],
+        )
+
+    def test_aborted_consumer_reports_transfer_local_error(self):
+        read_fd, write_fd = os.pipe()
+        os.close(read_fd)
+        self.bus.emit("SelectionTransfer", "/session/codex", "text/plain", 23)
+        self.bus.descriptors["SelectionWrite"] = write_fd
+        with self.assertRaises(ClipboardTransferError):
+            self.clipboard.write(23, b"consumer closed")
+        self.assertEqual(
+            (self.clipboard.closed, self.bus.calls[-1][3]),
+            (False, ("/session/codex", 23, False)),
+        )
+
+    def test_expired_transfer_is_local_only_when_completion_succeeds(self):
+        self.bus.emit("SelectionTransfer", "/session/codex", "text/plain", 24)
+        self.bus.fail_method = "SelectionWrite"
+        with self.assertRaises(ClipboardTransferError):
+            self.clipboard.write(24, b"expired")
+        self.assertEqual(self.bus.calls[-1][3], ("/session/codex", 24, False))
+        self.bus.emit("SelectionTransfer", "/session/codex", "text/plain", 25)
+        with (
+            patch.object(self.bus, "call", side_effect=PortalError("disconnected")),
+            self.assertRaises(PortalError) as caught,
+        ):
+            self.clipboard.write(25, b"disconnected")
+        self.assertNotIsInstance(caught.exception, ClipboardTransferError)
 
     def test_reads_exact_unicode_bytes_and_closes_descriptor(self):
         data = "Codex Linux — café Ελληνικά 日本語 🐧\nsecond line".encode()
