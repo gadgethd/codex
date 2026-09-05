@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from codex_linux_computer_use.capture import capture_png
+from codex_linux_computer_use.capture_worker import capture_png
 from codex_linux_computer_use.dbus import PortalError
 
 
