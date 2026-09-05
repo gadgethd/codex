@@ -9,6 +9,7 @@ import os
 import uuid
 from dataclasses import dataclass
 
+from .clipboard_content import ClipboardContent
 from .dbus import PortalBus, PortalError
 
 REMOTE = "org.freedesktop.portal.RemoteDesktop"
@@ -31,6 +32,7 @@ class PortalDesktop:
         self.subscription = None
         self.revoked = False
         self.pressed = {}
+        self.clipboard = None
 
     def capabilities(self):
         (devices,) = self.bus.call(
@@ -119,11 +121,17 @@ class PortalDesktop:
             except PortalError:
                 pass
 
-    def start(self, *, timeout=120):
+    def start(self, *, timeout=120, clipboard=False):
+        if type(clipboard) is not bool:
+            raise ValueError("Clipboard access must be a boolean.")
         if self.session:
             self.bus.poll()
             if not self.revoked and self.displays:
                 self.check_open()
+                if clipboard and self.clipboard is None:
+                    raise PortalError(
+                        "Stop sharing before requesting clipboard access."
+                    )
                 return list(self.displays)
             self.stop()
         try:
@@ -165,6 +173,8 @@ class PortalDesktop:
                 },
                 timeout=timeout,
             )
+            if clipboard:
+                self.clipboard = ClipboardContent(self.bus, self.session)
             result = self.bus.request(
                 REMOTE, "Start", "(osa{sv})", (self.session, ""), {}, timeout=timeout
             )
@@ -172,6 +182,8 @@ class PortalDesktop:
                 raise PortalError(
                     "The desktop did not grant both keyboard and pointer control."
                 )
+            if clipboard and result.get("clipboard_enabled") is not True:
+                raise PortalError("The desktop did not grant clipboard access.")
             streams = result.get("streams", [])
             if not 1 <= len(streams) <= 16:
                 raise PortalError("The desktop must share between 1 and 16 displays.")
@@ -197,6 +209,14 @@ class PortalDesktop:
     def _on_closed(self, _parameters):
         self.revoked = True
         self.pressed.clear()
+        if self.clipboard is not None:
+            self.clipboard.close()
+            self.clipboard = None
+
+    def idle(self):
+        self.bus.poll()
+        if self.clipboard is not None:
+            self.clipboard.serve()
 
     def check_open(self):
         self.bus.poll()
@@ -226,6 +246,9 @@ class PortalDesktop:
 
     def stop(self):
         with self.bus.cleanup():
+            if self.clipboard is not None:
+                self.clipboard.close()
+                self.clipboard = None
             if self.session and not self.revoked:
                 self.release_inputs()
                 try:
