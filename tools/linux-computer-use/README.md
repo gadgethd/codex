@@ -76,8 +76,8 @@ The same host policy and desktop lock checks apply to all input tools.
 
 Live MCP tests on the isolated Fedora 44 GNOME desktop verified button clicks,
 ASCII entry, Ctrl+A replacement, both scroll axes and a pointer drag against the
-events received by a GTK test application. Arbitrary Unicode entry remains
-tracked in [#7](https://github.com/gadgethd/codex/issues/7).
+events received by a GTK test application. Unicode entry uses `paste_text`,
+described below.
 
 Tests mock the desktop transport and do not open permission prompts:
 
@@ -103,7 +103,7 @@ Protocol reference: [XDG portal requests](https://flatpak.github.io/xdg-desktop-
 coordinates use display logical dimensions, which may differ from PNG pixels.
 Presses are tracked and released on stop, including ambiguous transport failures.
 Keysym input supports shortcuts and characters in the active keyboard layout;
-arbitrary Unicode typing is tracked separately in [#7](https://github.com/gadgethd/codex/issues/7).
+use `paste_text` for Unicode beyond that layout.
 
 `DesktopRuntime.run(action)` lets asynchronous clients use the portal on a
 dedicated owning thread. It rejects concurrent operations instead of queuing
@@ -119,5 +119,24 @@ sharing again. `desktop.clipboard.offer()` retains a nonempty mapping of MIME
 types to bytes, with at most 32 formats and 1 MiB total. `DesktopRuntime` services
 those offers between actions on the same owning thread. External ownership
 changes, revocation and shutdown discard retained bytes. Abandoned clipboard
-consumers do not close a healthy sharing session. MCP Unicode paste and clipboard
-preservation remain tracked in [#7](https://github.com/gadgethd/codex/issues/7).
+consumers do not close a healthy sharing session.
+
+For Unicode text, call `start_session` with `clipboard: true`, focus the intended
+editor, then call `paste_text`. It accepts up to 8192 characters and 16 KiB of
+UTF-8 without NUL characters. The default shortcut is `ctrl+v`; terminals commonly
+need `ctrl+shift+v`, and `shift+insert` is also available. Confirm the target text
+with a screenshot before retrying: clipboard requests can come from clipboard
+managers and do not prove insertion into the intended application.
+
+Paste captures all advertised clipboard formats within 1 MiB and restores them
+while sharing remains open. An oversized, unreadable or changing backup prevents
+the paste. A newer external clipboard owner is preserved. Some portals do not
+report their initial selection; in that case the tool reports that preservation
+was unavailable and leaves the paste text on the clipboard. Clipboard persistence
+after sharing ends depends on the desktop's clipboard manager. Previous clipboard
+contents are never included in tool results.
+
+Live stdio MCP tests on Fedora 44 GNOME Wayland verified exact multiline Unicode
+insertion into GTK 4 and Qt 6 editors and a saved VS Code file. GTK and Qt also
+read back the restored clipboard text. Broader desktop and Codex client validation
+remains tracked in [#7](https://github.com/gadgethd/codex/issues/7).

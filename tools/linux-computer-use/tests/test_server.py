@@ -64,6 +64,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
                         "drag",
                         "scroll",
                         "press_key",
+                        "paste_text",
                     ],
                 )
                 started = await client.call_tool(
