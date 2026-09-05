@@ -10,6 +10,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 from .dbus import PortalError
+from .input_tools import register_input_tools
 from .policy import LinuxPolicy
 from .portal import PortalDesktop
 from .runtime import DesktopRuntime
@@ -36,9 +37,12 @@ def create_server(runtime_factory=DesktopRuntime):
             policy.require_desktop()
 
             def guarded(desktop):
-                if not policy.allow_locked_computer_use and is_locked(desktop.bus):
-                    raise PortalError("The desktop is locked.")
-                result = action(desktop)
+                def check_lock():
+                    if not policy.allow_locked_computer_use and is_locked(desktop.bus):
+                        raise PortalError("The desktop is locked.")
+
+                check_lock()
+                result = action(desktop, check_lock)
                 if not policy.allow_locked_computer_use and is_locked(desktop.bus):
                     raise PortalError("The desktop locked during this operation.")
                 return result
@@ -55,7 +59,7 @@ def create_server(runtime_factory=DesktopRuntime):
     )
     async def start_session(ctx: Context) -> list[dict]:
         """Ask the Linux desktop to share monitors and allow native input. The user controls the desktop permission dialog. Returns stream IDs and logical dimensions for subsequent calls."""
-        displays = await run(ctx, PortalDesktop.start)
+        displays = await run(ctx, lambda desktop, check_lock: desktop.start())
         return [asdict(display) for display in displays]
 
     @server.tool(
@@ -64,7 +68,7 @@ def create_server(runtime_factory=DesktopRuntime):
     )
     async def screenshot(stream: int, ctx: Context) -> list:
         """Capture a shared monitor as PNG, at most 2048 pixels on its longest edge. Call start_session first. Coordinates for input use the display's logical dimensions."""
-        frame = await run(ctx, lambda desktop: desktop.screenshot(stream))
+        frame = await run(ctx, lambda desktop, check_lock: desktop.screenshot(stream))
         return [
             f"PNG dimensions: {frame['width']}x{frame['height']}.",
             Image(data=frame["png"], format="png"),
@@ -83,4 +87,5 @@ def create_server(runtime_factory=DesktopRuntime):
             raise ToolError(str(error)[:512]) from error
         return "Desktop sharing stopped."
 
+    register_input_tools(server, run)
     return server

@@ -2,9 +2,9 @@
 
 This directory is the native Linux implementation being developed in
 [gadgethd/codex#1](https://github.com/gadgethd/codex/issues/1). The stdio MCP service
-exposes Wayland session creation, monitor screenshots and session cleanup. Native
-input is implemented in the underlying library; MCP input tools, application
-targeting and additional desktop backends are still in development.
+exposes Wayland session creation, monitor screenshots, native input and session
+cleanup. Application targeting and additional desktop backends are still in
+development.
 
 The transport subscribes before sending requests so immediate permission replies
 are not lost. Requests have bounded timeouts and close outstanding desktop
@@ -63,6 +63,21 @@ Launch the Codex client from the graphical desktop session. A plain SSH session
 does not supply that desktop's connection variables. The service has been
 verified through the rebuilt Codex CLI on an isolated Fedora 44 GNOME desktop:
 host policy, session creation, one image forwarded to the model, and cleanup.
+
+Input tools use the logical display dimensions returned by `start_session`;
+scale screenshot coordinates when its PNG dimensions differ. `move_pointer`,
+`click` and `scroll` take a shared stream ID and positions within that
+display. Clicks support left, right or middle buttons and counts from one to
+three. Scrolling accepts up to 100 steps per axis, with positive values moving
+down or right. `press_key` accepts a chord such as `["CTRL", "a"]` or `["ENTER"]`,
+with up to eight printable ASCII or named keys. Buttons and keys are released
+after each action, including failures; cancellation closes the sharing session.
+The same host policy and desktop lock checks apply to all input tools.
+
+Live MCP tests on the isolated Fedora 44 GNOME desktop verified button clicks,
+ASCII entry, Ctrl+A replacement and both scroll axes against the
+events received by a GTK test application. Arbitrary Unicode entry remains
+tracked in [#7](https://github.com/gadgethd/codex/issues/7).
 
 Tests mock the desktop transport and do not open permission prompts:
 
