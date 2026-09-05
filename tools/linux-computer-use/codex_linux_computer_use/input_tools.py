@@ -84,47 +84,6 @@ def register_input_tools(server, run):
         return "Click completed."
 
     @server.tool(**options)
-    async def drag(
-        stream: StrictInt,
-        start_x: Coordinate,
-        start_y: Coordinate,
-        end_x: Coordinate,
-        end_y: Coordinate,
-        ctx: Context,
-    ) -> str:
-        """Drag the left button between two logical positions on one shared display. The button is released on success or failure."""
-
-        def action(desktop, check_lock):
-            desktop.check_open()
-            display = next((d for d in desktop.displays if d.stream == stream), None)
-            if display is None:
-                raise ValueError("Unknown display stream.")
-            if any(
-                x >= display.width or y >= display.height
-                for x, y in ((start_x, start_y), (end_x, end_y))
-            ):
-                raise ValueError(
-                    "Drag positions must be inside the display's logical dimensions."
-                )
-            desktop.move(stream, start_x, start_y)
-            check_lock()
-            try:
-                desktop.button(BUTTONS["left"], pressed=True)
-                for step in range(1, 13):
-                    check_lock()
-                    desktop.move(
-                        stream,
-                        start_x + (end_x - start_x) * step / 12,
-                        start_y + (end_y - start_y) * step / 12,
-                    )
-                    time.sleep(0.015)
-            finally:
-                desktop.button(BUTTONS["left"], pressed=False)
-
-        await run(ctx, action)
-        return "Drag completed."
-
-    @server.tool(**options)
     async def scroll(
         stream: StrictInt,
         x: Coordinate,
