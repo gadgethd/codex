@@ -41,11 +41,53 @@ def just_formatter_group(*, check: bool) -> FormatterGroup:
 
 
 def rust_formatter_group(*, check: bool) -> FormatterGroup:
-    args = ["cargo", "fmt", "--", "--config", "imports_granularity=Item"]
+    rust_root = REPO_ROOT / "codex-rs"
+    repository_files = subprocess.check_output(
+        [
+            "git",
+            "ls-files",
+            "-z",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--",
+            "*.rs",
+        ],
+        cwd=REPO_ROOT,
+    ).split(b"\0")
+    rust_files = []
+    for encoded_path in repository_files:
+        if encoded_path and (REPO_ROOT / os.fsdecode(encoded_path)).is_file():
+            path = os.path.relpath(REPO_ROOT / os.fsdecode(encoded_path), rust_root)
+            rust_files.append(
+                os.curdir + os.sep + path if path.startswith("-") else path
+            )
+    args = [
+        "rustfmt",
+        "--edition",
+        "2024",
+        "--config-path",
+        str(rust_root / "rustfmt.toml"),
+        "--config",
+        "imports_granularity=Item,skip_children=true",
+    ]
     if check:
         args.append("--check")
-    command = Command(tuple(args), REPO_ROOT / "codex-rs")
-    return FormatterGroup("Rust", (command,))
+    commands = []
+    batch = list(args)
+    # Stay below Windows' command-line limit, including quoting/encoding overhead.
+    base_size = sum(2 * len(os.fsencode(arg)) + 3 for arg in args)
+    batch_size = base_size
+    for path in sorted(set(rust_files)):
+        path_size = 2 * len(os.fsencode(path)) + 3
+        if batch_size + path_size > 24000 and len(batch) > len(args):
+            commands.append(Command(tuple(batch), rust_root))
+            batch, batch_size = list(args), base_size
+        batch.append(path)
+        batch_size += path_size
+    if len(batch) > len(args):
+        commands.append(Command(tuple(batch), rust_root))
+    return FormatterGroup("Rust", tuple(commands))
 
 
 def buildifier_formatter_group(*, check: bool) -> FormatterGroup:

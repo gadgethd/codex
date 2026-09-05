@@ -48,7 +48,7 @@ jobs:
       ${{ github.repository == 'openai/codex'
           && fromJSON('{"group":"codex-runners","labels":"codex-linux-x64"}')
           || 'ubuntu-24.04' }}
-    timeout-minutes: 10
+    timeout-minutes: ${{ github.repository == 'openai/codex' && 10 || 60 }}
     environment:
       name: bazel
       deployment: false
