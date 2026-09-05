@@ -1,4 +1,5 @@
 import unittest
+import os
 from unittest.mock import patch
 
 from codex_linux_computer_use.dbus import PortalError
@@ -107,12 +108,12 @@ class PortalTests(unittest.TestCase):
                     self.desktop.start()
                 self.assertIsNone(self.desktop.session)
 
-    def test_revoked_session_rejects_operations(self):
+    def test_revoked_session_rejects_capture(self):
         self.desktop.start()
         self.bus.callbacks[1](({},))
         calls = list(self.bus.calls)
         with self.assertRaises(PortalError):
-            self.desktop.check_open()
+            self.desktop.screenshot(42)
         self.assertEqual(self.bus.calls, calls)
 
     def test_start_after_revocation_creates_fresh_session(self):
@@ -162,6 +163,31 @@ class PortalTests(unittest.TestCase):
         with patch.object(self.bus, "call", side_effect=revoked_close):
             self.desktop.stop()
         self.assertEqual((self.desktop.session, self.bus.callbacks), (None, {}))
+
+    def test_screenshot_closes_remote_fd_on_capture_failure_or_revocation(self):
+        self.desktop.start()
+        for revoked in (False, True):
+            with self.subTest(revoked=revoked):
+                read_fd, write_fd = os.pipe()
+                os.close(write_fd)
+
+                def capture(*args):
+                    if revoked:
+                        self.bus.callbacks[1](({},))
+                        return {"png": b"png", "width": 1920, "height": 1080}
+                    raise PortalError("capture failed")
+
+                with (
+                    patch.object(self.bus, "call", return_value=read_fd),
+                    patch(
+                        "codex_linux_computer_use.capture.capture_png",
+                        side_effect=capture,
+                    ),
+                ):
+                    with self.assertRaises(PortalError):
+                        self.desktop.screenshot(42)
+                with self.assertRaises(OSError):
+                    os.fstat(read_fd)
 
 
 if __name__ == "__main__":
