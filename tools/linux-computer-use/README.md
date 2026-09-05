@@ -1,10 +1,10 @@
 # Native Linux computer use
 
 This directory is the native Linux implementation being developed in
-[gadgethd/codex#1](https://github.com/gadgethd/codex/issues/1). This first stage
-provides a synchronous D-Bus transport for XDG desktop portal requests. Desktop
-capture/input, application policy, and the MCP service follow in separate stages;
-this transport alone does not expose computer-use tools to Codex.
+[gadgethd/codex#1](https://github.com/gadgethd/codex/issues/1). This stage adds
+Wayland desktop session lifecycle to the D-Bus transport. Capture, input delivery,
+application policy and the MCP service follow separately; this library alone does
+not expose computer-use tools to Codex.
 
 The transport subscribes before sending requests so immediate permission replies
 are not lost. Requests have bounded timeouts and close outstanding desktop
@@ -23,7 +23,13 @@ cd tools/linux-computer-use
 PYTHONPATH=. python3 -m unittest discover -s tests -v
 ```
 
-The subsequent capture/input stage has also exercised this transport on Fedora
+`PortalDesktop.start()` negotiates a combined capture/input session and returns
+shared displays with stream IDs and logical dimensions. `stop()` preserves state
+after a failed remote close so callers can retry. Always call `close()` in
+`finally` to also close the dedicated bus connection. Revoked sessions can be
+started again with a new permission request.
+
+The subsequent capture/input stage has also exercised these sessions on Fedora
 44 GNOME Wayland, including session creation, native screen capture and cleanup.
 Other desktop environments and IDEs remain part of the broader verification
 matrix in [#5](https://github.com/gadgethd/codex/issues/5).
