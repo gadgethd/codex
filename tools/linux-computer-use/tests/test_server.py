@@ -61,6 +61,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
                         "stop_session",
                         "move_pointer",
                         "click",
+                        "drag",
                         "scroll",
                         "press_key",
                     ],

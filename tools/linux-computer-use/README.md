@@ -66,7 +66,7 @@ host policy, session creation, one image forwarded to the model, and cleanup.
 
 Input tools use the logical display dimensions returned by `start_session`;
 scale screenshot coordinates when its PNG dimensions differ. `move_pointer`,
-`click` and `scroll` take a shared stream ID and positions within that
+`click`, `drag` and `scroll` take a shared stream ID and positions within that
 display. Clicks support left, right or middle buttons and counts from one to
 three. Scrolling accepts up to 100 steps per axis, with positive values moving
 down or right. `press_key` accepts a chord such as `["CTRL", "a"]` or `["ENTER"]`,
@@ -75,7 +75,7 @@ after each action, including failures; cancellation closes the sharing session.
 The same host policy and desktop lock checks apply to all input tools.
 
 Live MCP tests on the isolated Fedora 44 GNOME desktop verified button clicks,
-ASCII entry, Ctrl+A replacement and both scroll axes against the
+ASCII entry, Ctrl+A replacement, both scroll axes and a pointer drag against the
 events received by a GTK test application. Arbitrary Unicode entry remains
 tracked in [#7](https://github.com/gadgethd/codex/issues/7).
 
