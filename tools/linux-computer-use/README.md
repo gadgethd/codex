@@ -2,8 +2,8 @@
 
 This directory is the native Linux implementation being developed in
 [gadgethd/codex#1](https://github.com/gadgethd/codex/issues/1). This stage adds
-native Wayland monitor capture to desktop sessions. Input delivery, application
-policy and the MCP service follow separately; this library alone does
+native Wayland monitor capture to desktop sessions. Application policy and the MCP
+service follow separately; this library alone does
 not expose computer-use tools to Codex.
 
 The transport subscribes before sending requests so immediate permission replies
@@ -39,3 +39,9 @@ Other desktop environments and IDEs remain part of the broader verification
 matrix in [#5](https://github.com/gadgethd/codex/issues/5).
 
 Protocol reference: [XDG portal requests](https://flatpak.github.io/xdg-desktop-portal/docs/desktop-portal.html#requests).
+
+`move`, `button`, `keysym` and `scroll` send native portal input. Pointer
+coordinates use display logical dimensions, which may differ from PNG pixels.
+Presses are tracked and released on stop, including ambiguous transport failures.
+Keysym input supports shortcuts and characters in the active keyboard layout;
+arbitrary Unicode typing is tracked separately in [#7](https://github.com/gadgethd/codex/issues/7).

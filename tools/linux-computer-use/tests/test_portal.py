@@ -189,6 +189,111 @@ class PortalTests(unittest.TestCase):
                 with self.assertRaises(OSError):
                     os.fstat(read_fd)
 
+    def test_coordinates_are_bounded_before_sending(self):
+        self.desktop.start()
+        calls = list(self.bus.calls)
+        for stream, x, y in [
+            (999, 10, 10),
+            (42, -1, 10),
+            (42, 1920, 10),
+            (42, 10, 1080),
+            (42, float("nan"), 0),
+            (42, True, 0),
+        ]:
+            with self.subTest(stream=stream, x=x, y=y), self.assertRaises(ValueError):
+                self.desktop.move(stream, x, y)
+        self.assertEqual(self.bus.calls, calls)
+
+    def test_ambiguous_press_failure_still_releases_input(self):
+        self.desktop.start()
+        self.bus.fail_method = "NotifyKeyboardKeysym"
+        with self.assertRaises(PortalError):
+            self.desktop.keysym(0xFFE3, pressed=True)
+        self.bus.fail_method = None
+        self.desktop.release_inputs()
+        self.assertEqual(
+            self.bus.calls[-1],
+            (
+                REMOTE,
+                "NotifyKeyboardKeysym",
+                "(oa{sv}iu)",
+                ("/session/codex", {}, 0xFFE3, 0),
+                {},
+            ),
+        )
+        self.assertEqual(self.desktop.pressed, {})
+
+    def test_invalid_button_and_key_state_do_not_send_input(self):
+        self.desktop.start()
+        calls = list(self.bus.calls)
+        for button in (272.0, "272", 275):
+            with self.subTest(button=button), self.assertRaises(ValueError):
+                self.desktop.button(button, pressed=True)
+        with self.assertRaises(ValueError):
+            self.desktop.keysym(0xFFE3, pressed=1)
+        self.assertEqual((self.bus.calls, self.desktop.pressed), (calls, {}))
+
+    def test_stop_releases_mouse_and_keyboard(self):
+        self.desktop.start()
+        self.desktop.keysym(0xFFE3, pressed=True)
+        self.desktop.button(272, pressed=True)
+        self.desktop.stop()
+        self.assertEqual(
+            self.bus.calls[-3:-1],
+            [
+                (
+                    REMOTE,
+                    "NotifyPointerButton",
+                    "(oa{sv}iu)",
+                    ("/session/codex", {}, 272, 0),
+                    {},
+                ),
+                (
+                    REMOTE,
+                    "NotifyKeyboardKeysym",
+                    "(oa{sv}iu)",
+                    ("/session/codex", {}, 0xFFE3, 0),
+                    {},
+                ),
+            ],
+        )
+        self.assertEqual(
+            (
+                self.desktop.session,
+                self.desktop.displays,
+                self.desktop.pressed,
+                self.bus.callbacks,
+            ),
+            (None, [], {}, {}),
+        )
+
+    def test_scroll_validates_both_axes_before_sending(self):
+        self.desktop.start()
+        calls = list(self.bus.calls)
+        with self.assertRaises(ValueError):
+            self.desktop.scroll(vertical=3, horizontal=101)
+        self.assertEqual(self.bus.calls, calls)
+        self.desktop.scroll(vertical=-2, horizontal=3)
+        self.assertEqual(
+            self.bus.calls[-2:],
+            [
+                (
+                    REMOTE,
+                    "NotifyPointerAxisDiscrete",
+                    "(oa{sv}ui)",
+                    ("/session/codex", {}, 0, -2),
+                    {},
+                ),
+                (
+                    REMOTE,
+                    "NotifyPointerAxisDiscrete",
+                    "(oa{sv}ui)",
+                    ("/session/codex", {}, 1, 3),
+                    {},
+                ),
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

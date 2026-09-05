@@ -5,6 +5,7 @@ client-facing service must additionally enforce Codex application policy.
 """
 
 from dataclasses import dataclass
+import math
 import os
 import uuid
 
@@ -29,6 +30,94 @@ class PortalDesktop:
         self.displays = []
         self.subscription = None
         self.revoked = False
+        self.pressed = {}
+
+    def capabilities(self):
+        (devices,) = self.bus.call(
+            "org.freedesktop.DBus.Properties",
+            "Get",
+            "(ss)",
+            (REMOTE, "AvailableDeviceTypes"),
+        )
+        (sources,) = self.bus.call(
+            "org.freedesktop.DBus.Properties",
+            "Get",
+            "(ss)",
+            (CAST, "AvailableSourceTypes"),
+        )
+        return {
+            "keyboard": bool(devices & 1),
+            "pointer": bool(devices & 2),
+            "monitors": bool(sources & 1),
+        }
+
+    def move(self, stream, x, y):
+        self.check_open()
+        display = next(
+            (display for display in self.displays if display.stream == stream), None
+        )
+        if display is None:
+            raise ValueError("Unknown display stream.")
+        if any(
+            type(n) not in (int, float) or not math.isfinite(n) for n in (x, y)
+        ) or not (0 <= x < display.width and 0 <= y < display.height):
+            raise ValueError(
+                "Pointer coordinates must be inside the display's logical dimensions."
+            )
+        self.bus.call(
+            REMOTE,
+            "NotifyPointerMotionAbsolute",
+            "(oa{sv}udd)",
+            (self.session, {}, stream, x, y),
+        )
+
+    def button(self, button, *, pressed):
+        if type(button) is not int or button not in (272, 273, 274):
+            raise ValueError(
+                "Supported buttons are left (272), right (273), and middle (274)."
+            )
+        self._input("NotifyPointerButton", button, pressed)
+
+    def keysym(self, keysym, *, pressed):
+        if type(keysym) is not int or not 0 < keysym <= 0x1FFFFFFF:
+            raise ValueError("Invalid keyboard keysym.")
+        self._input("NotifyKeyboardKeysym", keysym, pressed)
+
+    def _input(self, method, code, pressed):
+        self.check_open()
+        if type(pressed) is not bool:
+            raise ValueError("pressed must be a boolean.")
+        # Track before sending: on an ambiguous transport failure, still attempt
+        # release rather than leaving the user's modifier or mouse button down.
+        if pressed:
+            self.pressed[(method, code)] = None
+        self.bus.call(
+            REMOTE, method, "(oa{sv}iu)", (self.session, {}, code, int(pressed))
+        )
+        if not pressed:
+            self.pressed.pop((method, code), None)
+
+    def scroll(self, *, horizontal=0, vertical=0):
+        self.check_open()
+        if any(type(n) is not int or abs(n) > 100 for n in (horizontal, vertical)):
+            raise ValueError(
+                "Scroll distances must be integer steps between -100 and 100."
+            )
+        for axis, steps in enumerate((vertical, horizontal)):
+            if steps:
+                self.bus.call(
+                    REMOTE,
+                    "NotifyPointerAxisDiscrete",
+                    "(oa{sv}ui)",
+                    (self.session, {}, axis, steps),
+                )
+
+    def release_inputs(self):
+        for method, code in reversed(list(self.pressed)):
+            try:
+                self._input(method, code, False)
+            except PortalError:
+                pass
 
     def start(self, *, timeout=120):
         if self.session:
@@ -107,6 +196,7 @@ class PortalDesktop:
 
     def _on_closed(self, _parameters):
         self.revoked = True
+        self.pressed.clear()
 
     def check_open(self):
         self.bus.poll()
@@ -136,6 +226,7 @@ class PortalDesktop:
 
     def stop(self):
         if self.session and not self.revoked:
+            self.release_inputs()
             try:
                 self.bus.call(SESSION, "Close", "()", (), path=self.session)
             except PortalError:
@@ -145,6 +236,7 @@ class PortalDesktop:
             self.bus.unsubscribe(self.subscription)
         self.session = self.subscription = None
         self.displays = []
+        self.pressed.clear()
 
     def close(self):
         try:
