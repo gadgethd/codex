@@ -5,20 +5,33 @@ from .dbus import PortalError
 
 def is_locked(bus):
     known = False
-    for name, path in (
-        ("org.gnome.ScreenSaver", "/org/gnome/ScreenSaver"),
-        ("org.freedesktop.ScreenSaver", "/ScreenSaver"),
-        ("org.freedesktop.ScreenSaver", "/org/freedesktop/ScreenSaver"),
-        ("org.cinnamon.ScreenSaver", "/org/cinnamon/ScreenSaver"),
-        ("org.mate.ScreenSaver", "/org/mate/ScreenSaver"),
-        ("org.xfce.ScreenSaver", "/org/xfce/ScreenSaver"),
+    for name, path, interface in (
+        (
+            "org.gnome.Shell.ScreenShield",
+            "/org/gnome/ScreenSaver",
+            "org.gnome.ScreenSaver",
+        ),
+        ("org.gnome.ScreenSaver", "/org/gnome/ScreenSaver", "org.gnome.ScreenSaver"),
+        ("org.freedesktop.ScreenSaver", "/ScreenSaver", "org.freedesktop.ScreenSaver"),
+        (
+            "org.freedesktop.ScreenSaver",
+            "/org/freedesktop/ScreenSaver",
+            "org.freedesktop.ScreenSaver",
+        ),
+        (
+            "org.cinnamon.ScreenSaver",
+            "/org/cinnamon/ScreenSaver",
+            "org.cinnamon.ScreenSaver",
+        ),
+        ("org.mate.ScreenSaver", "/org/mate/ScreenSaver", "org.mate.ScreenSaver"),
+        ("org.xfce.ScreenSaver", "/org/xfce/ScreenSaver", "org.xfce.ScreenSaver"),
     ):
         bus.poll()
         try:
             (active,) = bus.connection.call_sync(
                 name,
                 path,
-                name,
+                interface,
                 "GetActive",
                 None,
                 None,

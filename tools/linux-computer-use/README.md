@@ -19,6 +19,9 @@ desktop. Call `PortalBus.close()` in `finally` to release the connection.
 `screenshot(stream)` returns PNG bytes and image dimensions, capped at a
 2048-pixel longest edge and 16 MiB. Capture needs GStreamer 1.0/GstApp bindings,
 PipeWire, video conversion/scaling and PNG plugins in the graphical session.
+GStreamer runs in a separate process with a twelve-second deadline covering
+startup, capture and shutdown. A stalled pipeline is terminated and reaped so
+the desktop runtime can report an error and still close its session.
 
 Create an environment with access to the distribution's desktop bindings and
 install the MCP dependency:
@@ -68,6 +71,6 @@ arbitrary Unicode typing is tracked separately in [#7](https://github.com/gadget
 `DesktopRuntime.run(action)` lets asynchronous clients use the portal on a
 dedicated owning thread. It rejects concurrent operations instead of queuing
 input. Cancellation closes pending permission prompts and releases held input
-before accepting another action; an in-flight D-Bus call or frame capture may
-take up to its ten-second timeout to return. Await `close()` during client
+before accepting another action; an in-flight D-Bus call may take ten seconds,
+and frame capture may take up to its twelve-second deadline. Await `close()` during client
 shutdown to close the desktop session and connection on their owning thread.

@@ -38,11 +38,23 @@ class LockStateTests(unittest.TestCase):
             (
                 3,
                 [
-                    (name, path, name, "GetActive", None, None, 2, 1000, None)
-                    for name, path in [
-                        ("org.gnome.ScreenSaver", "/org/gnome/ScreenSaver"),
-                        ("org.freedesktop.ScreenSaver", "/ScreenSaver"),
-                        ("org.freedesktop.ScreenSaver", "/org/freedesktop/ScreenSaver"),
+                    (name, path, interface, "GetActive", None, None, 2, 1000, None)
+                    for name, path, interface in [
+                        (
+                            "org.gnome.Shell.ScreenShield",
+                            "/org/gnome/ScreenSaver",
+                            "org.gnome.ScreenSaver",
+                        ),
+                        (
+                            "org.gnome.ScreenSaver",
+                            "/org/gnome/ScreenSaver",
+                            "org.gnome.ScreenSaver",
+                        ),
+                        (
+                            "org.freedesktop.ScreenSaver",
+                            "/ScreenSaver",
+                            "org.freedesktop.ScreenSaver",
+                        ),
                     ]
                 ],
             ),
@@ -50,13 +62,21 @@ class LockStateTests(unittest.TestCase):
 
     def test_inactive_desktop_is_known_despite_unavailable_services(self):
         bus = LockBus(
-            [BusError(), False, BusError(), BusError(), BusError(), BusError()]
+            [
+                False,
+                BusError(),
+                BusError(),
+                BusError(),
+                BusError(),
+                BusError(),
+                BusError(),
+            ]
         )
         self.assertFalse(is_locked(bus))
-        self.assertEqual(bus.polls, 6)
+        self.assertEqual(bus.polls, 7)
 
     def test_missing_and_malformed_responses_cannot_grant_access(self):
-        for responses in ([BusError()] * 6, [0, 1, "false", None, [], {}]):
+        for responses in ([BusError()] * 7, [0, 1, "false", None, [], {}, b"false"]):
             with (
                 self.subTest(responses=responses),
                 self.assertRaisesRegex(PortalError, "Cannot determine"),
