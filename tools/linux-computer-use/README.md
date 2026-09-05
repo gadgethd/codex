@@ -111,3 +111,13 @@ input. Cancellation closes pending permission prompts and releases held input
 before accepting another action; an in-flight D-Bus call may take ten seconds,
 and frame capture may take up to its twelve-second deadline. Await `close()` during client
 shutdown to close the desktop session and connection on their owning thread.
+
+Direct backend callers can request clipboard permission with
+`PortalDesktop.start(clipboard=True)`. The desktop must explicitly grant it;
+adding clipboard access to an existing session requires stopping and starting
+sharing again. `desktop.clipboard.offer()` retains a nonempty mapping of MIME
+types to bytes, with at most 32 formats and 1 MiB total. `DesktopRuntime` services
+those offers between actions on the same owning thread. External ownership
+changes, revocation and shutdown discard retained bytes. Abandoned clipboard
+consumers do not close a healthy sharing session. MCP Unicode paste and clipboard
+preservation remain tracked in [#7](https://github.com/gadgethd/codex/issues/7).
