@@ -1,8 +1,9 @@
 import unittest
 import os
+import threading
 from unittest.mock import patch
 
-from codex_linux_computer_use.dbus import PortalError
+from codex_linux_computer_use.dbus import PortalBus, PortalError
 from codex_linux_computer_use.portal import (
     CAST,
     REMOTE,
@@ -12,7 +13,7 @@ from codex_linux_computer_use.portal import (
 )
 
 
-class FakeBus:
+class FakeBus(PortalBus):
     def __init__(self):
         self.calls = []
         self.callbacks = {}
@@ -24,11 +25,13 @@ class FakeBus:
         }
         self.fail_method = None
         self.closed = False
+        self.cancel_event = None
 
     def variant(self, signature, value):
         return signature, value
 
     def call(self, interface, method, signature, values, **kwargs):
+        self._check_cancelled()
         self.calls.append((interface, method, signature, values, kwargs))
         if method == self.fail_method:
             raise PortalError("transport failed")
@@ -46,7 +49,7 @@ class FakeBus:
         del self.callbacks[subscription]
 
     def poll(self):
-        pass
+        self._check_cancelled()
 
     def close(self):
         self.closed = True
@@ -94,6 +97,30 @@ class PortalTests(unittest.TestCase):
         self.assertEqual((self.desktop.session, self.bus.callbacks), (None, {}))
         self.bus.fail_method = None
         self.assertEqual(self.desktop.start(), [Display(42, 1920, 1080)])
+
+    def test_cancellation_during_start_closes_session_and_subscription(self):
+        original = self.bus.request
+        for phase in ("CreateSession", "Start"):
+            with self.subTest(phase=phase):
+                self.bus.cancel_event = threading.Event()
+
+                def cancel(interface, method, *args, phase=phase, **kwargs):
+                    result = original(interface, method, *args, **kwargs)
+                    if method == phase:
+                        self.bus.cancel_event.set()
+                    return result
+
+                self.bus.request = cancel
+                with self.assertRaisesRegex(PortalError, "cancelled"):
+                    self.desktop.start()
+                self.assertEqual(
+                    (self.desktop.session, self.bus.callbacks, self.bus.calls[-1]),
+                    (
+                        None,
+                        {},
+                        (SESSION, "Close", "()", (), {"path": "/session/codex"}),
+                    ),
+                )
 
     def test_partial_input_permission_and_missing_dimensions_are_rejected(self):
         for result in [

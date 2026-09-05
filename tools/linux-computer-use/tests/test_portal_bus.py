@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+import threading
 import unittest
 from unittest.mock import Mock
 
@@ -17,6 +18,7 @@ class PortalRequestTests(unittest.TestCase):
             destroy=lambda: self.events.append("timer destroyed"),
         )
         self.bus = PortalBus.__new__(PortalBus)
+        self.bus.cancel_event = None
         self.bus.connection = SimpleNamespace(get_unique_name=lambda: ":1.42")
         self.bus.GLib = SimpleNamespace(
             timeout_source_new=lambda milliseconds: self.timer
@@ -34,6 +36,7 @@ class PortalRequestTests(unittest.TestCase):
         return 1
 
     def call(self, interface, method, signature, values, **kwargs):
+        self.bus._check_cancelled()
         self.events.append(method)
         if method == "CreateSession":
             self.assertEqual(self.events[:2], ["subscribed", "CreateSession"])
@@ -93,6 +96,35 @@ class PortalRequestTests(unittest.TestCase):
                 with self.assertRaisesRegex(PortalError, message):
                     self.request()
                 self.assertEqual(self.events[-2:], ["timer destroyed", "unsubscribed"])
+
+    def test_client_cancellation_closes_pending_prompt(self):
+        cancelled = threading.Event()
+        self.bus.cancel_event = cancelled
+        self.bus.context.iteration = lambda may_block: cancelled.set()
+        with self.assertRaisesRegex(PortalError, "operation was cancelled"):
+            self.request()
+        self.assertEqual(
+            self.events,
+            [
+                "subscribed",
+                "CreateSession",
+                "timer destroyed",
+                "timer destroyed",
+                "unsubscribed",
+                "Close",
+            ],
+        )
+        self.assertIs(self.bus.cancel_event, cancelled)
+
+    def test_successful_session_handle_is_retained_when_cancellation_races_reply(self):
+        self.bus.cancel_event = threading.Event()
+
+        def respond_and_cancel(may_block):
+            self.callback(self.response)
+            self.bus.cancel_event.set()
+
+        self.bus.context.iteration = respond_and_cancel
+        self.assertEqual(self.request(), {"session_handle": "/session/test"})
 
     def test_transport_failure_cleans_up_even_if_request_close_fails(self):
         self.bus.call.side_effect = PortalError("bus disconnected")

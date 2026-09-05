@@ -45,3 +45,10 @@ coordinates use display logical dimensions, which may differ from PNG pixels.
 Presses are tracked and released on stop, including ambiguous transport failures.
 Keysym input supports shortcuts and characters in the active keyboard layout;
 arbitrary Unicode typing is tracked separately in [#7](https://github.com/gadgethd/codex/issues/7).
+
+`DesktopRuntime.run(action)` lets asynchronous clients use the portal on a
+dedicated owning thread. It rejects concurrent operations instead of queuing
+input. Cancellation closes pending permission prompts and releases held input
+before accepting another action; an in-flight D-Bus call or frame capture may
+take up to its ten-second timeout to return. Await `close()` during client
+shutdown to close the desktop session and connection on their owning thread.

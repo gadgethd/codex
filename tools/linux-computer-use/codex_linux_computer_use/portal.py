@@ -225,18 +225,19 @@ class PortalDesktop:
             os.close(fd)
 
     def stop(self):
-        if self.session and not self.revoked:
-            self.release_inputs()
-            try:
-                self.bus.call(SESSION, "Close", "()", (), path=self.session)
-            except PortalError:
-                if not self.revoked:
-                    raise
-        if self.subscription is not None:
-            self.bus.unsubscribe(self.subscription)
-        self.session = self.subscription = None
-        self.displays = []
-        self.pressed.clear()
+        with self.bus.cleanup():
+            if self.session and not self.revoked:
+                self.release_inputs()
+                try:
+                    self.bus.call(SESSION, "Close", "()", (), path=self.session)
+                except PortalError:
+                    if not self.revoked:
+                        raise
+            if self.subscription is not None:
+                self.bus.unsubscribe(self.subscription)
+            self.session = self.subscription = None
+            self.displays = []
+            self.pressed.clear()
 
     def close(self):
         try:
