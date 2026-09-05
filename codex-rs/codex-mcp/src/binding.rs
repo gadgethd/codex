@@ -363,6 +363,12 @@ impl PreparedMcpCall {
             }
             None => None,
         };
+        let meta = crate::computer_use_policy::add_computer_use_policy(
+            &self.tool_info,
+            &self.server_metadata,
+            &self.config.config_layer_stack,
+            meta,
+        );
         let result = self
             .client
             .client
