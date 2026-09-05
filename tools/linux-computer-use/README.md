@@ -140,3 +140,24 @@ Live stdio MCP tests on Fedora 44 GNOME Wayland verified exact multiline Unicode
 insertion into GTK 4 and Qt 6 editors and a saved VS Code file. GTK and Qt also
 read back the restored clipboard text. Broader desktop and Codex client validation
 remains tracked in [#7](https://github.com/gadgethd/codex/issues/7).
+
+An opt-in desktop fixture smoke test is available for Fedora 44 GNOME Wayland.
+It requires GNOME Shell's headless mode, PipeWire, WirePlumber, the GNOME and
+frontend desktop portals, D-Bus, FUSE utilities, and Python GI bindings for GTK 4
+and AT-SPI. It uses Fedora's `/usr/libexec` service paths and an English locale;
+it is not yet the cross-distribution verification matrix.
+
+From the repository root, using the environment described above:
+
+```sh
+tools/linux-computer-use/.venv/bin/python \
+  tools/linux-computer-use/tests/live/gnome_smoke.py \
+  --output /tmp/codex-linux-fixture-results
+```
+
+The output directory must be new. The script creates a private session bus,
+GNOME compositor, PipeWire and portal services, verifies that a GTK window maps,
+and stops its test processes. Logs and `result.json` remain in the output
+directory. It preserves only basic user/path environment values so inherited
+accessibility or PipeWire addresses cannot select the host desktop. A companion
+consent helper is restricted to this private session for subsequent input tests.
