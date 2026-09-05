@@ -2,8 +2,8 @@
 
 This directory is the native Linux implementation being developed in
 [gadgethd/codex#1](https://github.com/gadgethd/codex/issues/1). This stage adds
-Wayland desktop session lifecycle to the D-Bus transport. Capture, input delivery,
-application policy and the MCP service follow separately; this library alone does
+native Wayland monitor capture to desktop sessions. Input delivery, application
+policy and the MCP service follow separately; this library alone does
 not expose computer-use tools to Codex.
 
 The transport subscribes before sending requests so immediate permission replies
@@ -15,6 +15,10 @@ For live use, run the graphical session's system Python 3.10 or newer with the
 distribution's PyGObject package and a session bus. A virtual environment may not
 have access to the system `gi` module. Permission dialogs remain controlled by the
 desktop. Call `PortalBus.close()` in `finally` to release the connection.
+
+`screenshot(stream)` returns PNG bytes and image dimensions, capped at a
+2048-pixel longest edge and 16 MiB. Capture needs GStreamer 1.0/GstApp bindings,
+PipeWire, video conversion/scaling and PNG plugins in the graphical session.
 
 Tests use only the Python standard library and do not open desktop prompts:
 

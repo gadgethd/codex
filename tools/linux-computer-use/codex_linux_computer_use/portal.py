@@ -5,6 +5,7 @@ client-facing service must additionally enforce Codex application policy.
 """
 
 from dataclasses import dataclass
+import os
 import uuid
 
 from .dbus import PortalBus, PortalError
@@ -113,6 +114,25 @@ class PortalDesktop:
             raise PortalError(
                 "The desktop session is closed. Start a new sharing session."
             )
+
+    def screenshot(self, stream):
+        self.check_open()
+        display = next(
+            (display for display in self.displays if display.stream == stream), None
+        )
+        if display is None:
+            raise ValueError("Unknown display stream.")
+        from .capture import capture_png
+
+        fd = self.bus.call(
+            CAST, "OpenPipeWireRemote", "(oa{sv})", (self.session, {}), receive_fd=True
+        )
+        try:
+            screenshot = capture_png(fd, stream, display.width, display.height)
+            self.check_open()
+            return screenshot
+        finally:
+            os.close(fd)
 
     def stop(self):
         if self.session and not self.revoked:
