@@ -4,6 +4,7 @@ One transport belongs to one calling thread. A dedicated bus connection prevents
 closing this client from interfering with other desktop integrations.
 """
 
+from contextlib import contextmanager
 import threading
 import time
 import uuid
@@ -41,6 +42,7 @@ class PortalBus:
                 f"Cannot connect to the desktop session bus: {error.message}"
             ) from error
         self.closed = False
+        self.cancel_event = None
 
     def variant(self, signature, value):
         return self.GLib.Variant(signature, value)
@@ -50,11 +52,26 @@ class PortalBus:
             raise PortalError("The desktop session must be used on its owning thread.")
         if self.closed:
             raise PortalError("The desktop bus connection is closed.")
+        self._check_cancelled()
         # Do not let an unrelated flood of bus events keep a tool call alive.
         for _ in range(64):
             if not self.context.pending():
                 break
             self.context.iteration(False)
+
+    def _check_cancelled(self):
+        if self.cancel_event is not None and self.cancel_event.is_set():
+            raise PortalError("The desktop operation was cancelled.")
+
+    @contextmanager
+    def cleanup(self):
+        """Permit resource release after the requesting client has cancelled."""
+        cancelled = self.cancel_event
+        self.cancel_event = None
+        try:
+            yield
+        finally:
+            self.cancel_event = cancelled
 
     def call(
         self, interface, method, signature, values, *, path=None, receive_fd=False
@@ -120,6 +137,13 @@ class PortalBus:
         timer = self.GLib.timeout_source_new(max(1, int(timeout * 1000)))
         timer.set_callback(lambda *_args: timed_out.append(True) or False)
         timer.attach(self.context)
+        cancel_timer = None
+        if self.cancel_event is not None:
+            # Wake a blocked signal iteration so an MCP cancellation can close
+            # the permission prompt without waiting for the request timeout.
+            cancel_timer = self.GLib.timeout_source_new(100)
+            cancel_timer.set_callback(lambda *_args: True)
+            cancel_timer.attach(self.context)
         try:
             (returned_path,) = self.call(
                 interface, method, signature, (*values, options)
@@ -138,9 +162,13 @@ class PortalBus:
                     "The desktop portal did not honor the request handle token."
                 )
             while not responses and not timed_out and time.monotonic() < deadline:
+                self._check_cancelled()
                 self.context.iteration(True)
             if not responses:
+                self._check_cancelled()
                 raise PortalError(f"{method} timed out waiting for desktop permission.")
+            # Return successful handles even when cancellation races the reply.
+            # The owner must retain them so its cleanup can close the session.
             code, result = responses[0]
             if code != 0:
                 raise PortalError(
@@ -149,26 +177,34 @@ class PortalBus:
             return result
         finally:
             timer.destroy()
+            if cancel_timer is not None:
+                cancel_timer.destroy()
             self.unsubscribe(subscription)
             if not responses:
-                try:
-                    self.call(
-                        "org.freedesktop.portal.Request", "Close", "()", (), path=path
-                    )
-                except PortalError:
-                    pass
+                with self.cleanup():
+                    try:
+                        self.call(
+                            "org.freedesktop.portal.Request",
+                            "Close",
+                            "()",
+                            (),
+                            path=path,
+                        )
+                    except PortalError:
+                        pass
 
     def close(self):
         if not self.closed:
-            self.poll()
-            try:
-                self.connection.close_sync(None)
-            except self.GLib.Error as error:
-                if not error.matches(
-                    self.Gio.io_error_quark(), self.Gio.IOErrorEnum.CLOSED
-                ):
-                    raise PortalError(
-                        f"Cannot close the desktop bus: {error.message}"
-                    ) from error
-            finally:
-                self.closed = True
+            with self.cleanup():
+                self.poll()
+                try:
+                    self.connection.close_sync(None)
+                except self.GLib.Error as error:
+                    if not error.matches(
+                        self.Gio.io_error_quark(), self.Gio.IOErrorEnum.CLOSED
+                    ):
+                        raise PortalError(
+                            f"Cannot close the desktop bus: {error.message}"
+                        ) from error
+                finally:
+                    self.closed = True
