@@ -14,6 +14,7 @@ use codex_app_server_protocol::BrowserUseOriginPolicy;
 use codex_app_server_protocol::BrowserUseRequirements;
 use codex_app_server_protocol::CliAuthCredentialsStoreMode;
 use codex_app_server_protocol::ClientResponsePayload;
+use codex_app_server_protocol::ComputerUseLinuxRequirements;
 use codex_app_server_protocol::ComputerUseMacosRequirements;
 use codex_app_server_protocol::ComputerUseRequirements;
 use codex_app_server_protocol::ComputerUseWindowsExeRequirement;
@@ -520,6 +521,18 @@ fn map_computer_use_requirements_to_api(
         default_app_access: computer_use
             .default_app_access
             .map(map_allow_deny_requirement_to_api),
+        linux: computer_use
+            .linux
+            .map(|linux| ComputerUseLinuxRequirements {
+                desktop_ids: linux.desktop_ids.map(|desktop_ids| {
+                    desktop_ids
+                        .into_iter()
+                        .map(|(desktop_id, requirement)| {
+                            (desktop_id, map_allow_deny_requirement_to_api(requirement))
+                        })
+                        .collect()
+                }),
+            }),
         macos: computer_use
             .macos
             .map(|macos| ComputerUseMacosRequirements {
@@ -970,6 +983,7 @@ mod tests {
                 )])),
             }),
             computer_use: Some(ComputerUseRequirementsToml {
+                linux: None,
                 allow_locked_computer_use: Some(false),
                 allow_persistent_approval: Some(false),
                 default_app_access: Some(AllowDenyRequirementToml::Deny),
@@ -1029,6 +1043,7 @@ mod tests {
         assert_eq!(
             mapped.computer_use,
             Some(ComputerUseRequirements {
+                linux: None,
                 allow_locked_computer_use: Some(false),
                 allow_persistent_approval: Some(false),
                 default_app_access: Some(AllowDenyRequirement::Deny),

@@ -2514,6 +2514,7 @@ mod tests {
         assert_eq!(
             requirements.computer_use,
             Some(ComputerUseRequirementsToml {
+                linux: None,
                 allow_locked_computer_use: Some(false),
                 allow_persistent_approval: Some(false),
                 default_app_access: Some(AllowDenyRequirementToml::Deny),
@@ -2723,6 +2724,7 @@ mod tests {
             origins: None,
         };
         let computer_use = ComputerUseRequirementsToml {
+            linux: None,
             allow_locked_computer_use: Some(false),
             allow_persistent_approval: Some(false),
             default_app_access: None,

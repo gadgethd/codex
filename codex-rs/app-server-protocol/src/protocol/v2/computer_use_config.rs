@@ -10,8 +10,25 @@ use std::collections::BTreeMap;
 #[ts(export_to = "v2/")]
 pub struct ComputerUseConfig {
     pub default_app_access: Option<AllowDenyRequirement>,
+    pub linux: Option<ComputerUseLinuxConfig>,
     pub macos: Option<ComputerUseMacosConfig>,
     pub windows: Option<ComputerUseWindowsConfig>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export_to = "v2/")]
+pub struct ComputerUseLinuxConfig {
+    /// Application rules keyed by exact XDG desktop-file ID, including `.desktop`.
+    pub desktop_ids: Option<BTreeMap<String, AllowDenyRequirement>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ComputerUseLinuxRequirements {
+    /// Application rules keyed by exact XDG desktop-file ID, including `.desktop`.
+    pub desktop_ids: Option<BTreeMap<String, AllowDenyRequirement>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]

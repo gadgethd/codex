@@ -663,6 +663,10 @@ downloads = "allow"
 allow_locked_computer_use = true
 default_app_access = "allow"
 
+[computer_use.linux.desktop_ids]
+"code.desktop" = "allow"
+"org.gnome.TextEditor.desktop" = "deny"
+
 [computer_use.macos.bundle_ids]
 "com.apple.Safari" = "deny"
 
@@ -690,6 +694,9 @@ uploads = "deny"
 
 [computer_use]
 allow_persistent_approval = false
+
+[computer_use.linux.desktop_ids]
+"code.desktop" = "deny"
 
 [computer_use.macos.bundle_ids]
 "com.apple.Safari" = "allow"
@@ -729,6 +736,10 @@ uploads = "deny"
 allow_locked_computer_use = true
 allow_persistent_approval = false
 default_app_access = "allow"
+
+[computer_use.linux.desktop_ids]
+"code.desktop" = "deny"
+"org.gnome.TextEditor.desktop" = "deny"
 
 [computer_use.macos.bundle_ids]
 "com.apple.Safari" = "allow"

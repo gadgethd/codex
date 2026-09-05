@@ -49,6 +49,7 @@ pub use browser_computer_use_requirements::AllowDenyRequirementToml;
 pub use browser_computer_use_requirements::BrowserUseAccessApprovalLifetimeToml;
 pub use browser_computer_use_requirements::BrowserUseOriginPolicyToml;
 pub use browser_computer_use_requirements::BrowserUseRequirementsToml;
+pub use browser_computer_use_requirements::ComputerUseLinuxRequirementsToml;
 pub use browser_computer_use_requirements::ComputerUseMacosRequirementsToml;
 pub use browser_computer_use_requirements::ComputerUseRequirementsToml;
 pub use browser_computer_use_requirements::ComputerUseWindowsExeRequirementToml;
@@ -81,6 +82,7 @@ pub use codex_protocol::mcp_policy::PluginMcpRequirements as PluginRequirementsT
 pub use codex_utils_absolute_path::AbsolutePathBuf;
 pub use codex_utils_absolute_path::AbsolutePathBufGuard;
 pub use computer_use::ComputerUseConfigToml;
+pub use computer_use::ComputerUseLinuxConfigToml;
 pub use computer_use::ComputerUseMacosConfigToml;
 pub use computer_use::ComputerUseWindowsConfigToml;
 pub use computer_use::ComputerUseWindowsExeConfigToml;

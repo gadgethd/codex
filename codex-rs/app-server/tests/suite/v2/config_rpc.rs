@@ -327,6 +327,7 @@ access = "deny"
     assert_eq!(
         requirements.computer_use,
         Some(ComputerUseRequirements {
+            linux: None,
             allow_locked_computer_use: Some(false),
             allow_persistent_approval: Some(false),
             default_app_access: Some(AllowDenyRequirement::Deny),
@@ -744,6 +745,7 @@ access = "deny"
     assert_eq!(
         config.computer_use,
         Some(ComputerUseConfig {
+            linux: None,
             default_app_access: Some(AllowDenyRequirement::Deny),
             macos: Some(ComputerUseMacosConfig {
                 bundle_ids: Some(BTreeMap::from([
@@ -842,6 +844,7 @@ access = "deny"
     assert_eq!(
         requirements.computer_use,
         Some(ComputerUseRequirements {
+            linux: None,
             allow_locked_computer_use: None,
             allow_persistent_approval: None,
             default_app_access: Some(AllowDenyRequirement::Allow),
@@ -1931,6 +1934,7 @@ access = "deny"
     assert_eq!(
         read.config.computer_use,
         Some(ComputerUseConfig {
+            linux: None,
             default_app_access: Some(AllowDenyRequirement::Deny),
             macos: Some(ComputerUseMacosConfig {
                 bundle_ids: Some(BTreeMap::from([(

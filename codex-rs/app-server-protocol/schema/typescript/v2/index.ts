@@ -90,6 +90,8 @@ export type { CommandExecutionSource } from "./CommandExecutionSource";
 export type { CommandExecutionStatus } from "./CommandExecutionStatus";
 export type { CommandMigration } from "./CommandMigration";
 export type { ComputerUseConfig } from "./ComputerUseConfig";
+export type { ComputerUseLinuxConfig } from "./ComputerUseLinuxConfig";
+export type { ComputerUseLinuxRequirements } from "./ComputerUseLinuxRequirements";
 export type { ComputerUseMacosConfig } from "./ComputerUseMacosConfig";
 export type { ComputerUseMacosRequirements } from "./ComputerUseMacosRequirements";
 export type { ComputerUseRequirements } from "./ComputerUseRequirements";

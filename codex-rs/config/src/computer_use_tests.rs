@@ -9,6 +9,10 @@ fn computer_use_config_round_trips() {
 [computer_use]
 default_app_access = "deny"
 
+[computer_use.linux.desktop_ids]
+"org.gnome.TextEditor.desktop" = "allow"
+"code.desktop" = "deny"
+
 [computer_use.macos.bundle_ids]
 "com.apple.Safari" = "allow"
 
@@ -25,6 +29,15 @@ access = "allow"
     .expect("computer use config should deserialize");
 
     let expected = ComputerUseConfigToml {
+        linux: Some(ComputerUseLinuxConfigToml {
+            desktop_ids: Some(BTreeMap::from([
+                (
+                    "org.gnome.TextEditor.desktop".to_string(),
+                    AllowDenyRequirementToml::Allow,
+                ),
+                ("code.desktop".to_string(), AllowDenyRequirementToml::Deny),
+            ])),
+        }),
         default_app_access: Some(AllowDenyRequirementToml::Deny),
         macos: Some(ComputerUseMacosConfigToml {
             bundle_ids: Some(BTreeMap::from([(

@@ -4849,6 +4849,16 @@
             }
           ]
         },
+        "linux": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ComputerUseLinuxConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "macos": {
           "anyOf": [
             {
@@ -4867,6 +4877,36 @@
             {
               "type": "null"
             }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ComputerUseLinuxConfig": {
+      "properties": {
+        "desktop_ids": {
+          "additionalProperties": {
+            "$ref": "#/definitions/AllowDenyRequirement"
+          },
+          "description": "Application rules keyed by exact XDG desktop-file ID, including `.desktop`.",
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ComputerUseLinuxRequirements": {
+      "properties": {
+        "desktopIds": {
+          "additionalProperties": {
+            "$ref": "#/definitions/AllowDenyRequirement"
+          },
+          "description": "Application rules keyed by exact XDG desktop-file ID, including `.desktop`.",
+          "type": [
+            "object",
+            "null"
           ]
         }
       },
@@ -4918,6 +4958,16 @@
           "anyOf": [
             {
               "$ref": "#/definitions/AllowDenyRequirement"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "linux": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ComputerUseLinuxRequirements"
             },
             {
               "type": "null"
