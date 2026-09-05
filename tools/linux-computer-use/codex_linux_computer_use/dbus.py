@@ -4,10 +4,10 @@ One transport belongs to one calling thread. A dedicated bus connection prevents
 closing this client from interfering with other desktop integrations.
 """
 
-from contextlib import contextmanager
 import threading
 import time
 import uuid
+from contextlib import contextmanager
 
 
 class PortalError(RuntimeError):

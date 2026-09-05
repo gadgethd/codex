@@ -1,6 +1,6 @@
-from types import SimpleNamespace
 import threading
 import unittest
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 from codex_linux_computer_use.dbus import PortalBus, PortalError

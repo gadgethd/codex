@@ -1,6 +1,6 @@
 import sys
-from types import SimpleNamespace
 import unittest
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from codex_linux_computer_use.capture_worker import capture_png
