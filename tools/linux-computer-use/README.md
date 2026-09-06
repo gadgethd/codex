@@ -235,8 +235,13 @@ checks that the real client forwards the discovered GTK editor to the model.
 
 Discovery also reports `desktop_id` when authenticated process credentials,
 the live executable and fixed launch arguments match one installed desktop
-entry. Missing process-handle support, stale processes, ambiguous launchers and
-unsupported launch expansions produce `null`. Inherited desktop groups and
+entry. D-Bus-activated entries can also match through their registered session-bus
+name when authenticated process handles prove that its owner is the same live
+process as the accessibility peer. Ownership is checked again before returning;
+conflicting D-Bus and Exec identities remain ambiguous. The service only queries
+existing owners and never activates applications during discovery. Missing
+process-handle support, stale processes, ambiguous launchers and unsupported
+launch expansions produce `null`. Inherited desktop groups and
 app-provided labels are not used to establish this identity. Desktop entries
 describe launch identities, not isolation from hostile programs running as the
 same Unix user. This evidence does not yet relax the full-desktop policy check.

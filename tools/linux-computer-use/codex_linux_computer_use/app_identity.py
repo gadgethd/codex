@@ -7,6 +7,8 @@ import shutil
 import time
 from contextlib import ExitStack
 
+from .dbus_identity import process_handle, session_identities
+
 
 def matches(entry, executable, arguments, working_directory):
     """Return True/False for a proven match/mismatch, or None if uncertain."""
@@ -86,41 +88,8 @@ def desktop_id(bus, owner):
             return None
         if time.monotonic() >= bus.deadline:
             raise TimeoutError("Application identity deadline exceeded")
-        reply, descriptors = bus.bus.call_with_unix_fd_list_sync(
-            "org.freedesktop.DBus",
-            "/org/freedesktop/DBus",
-            "org.freedesktop.DBus",
-            "GetConnectionCredentials",
-            bus.GLib.Variant("(s)", (owner,)),
-            None,
-            bus.Gio.DBusCallFlags.NO_AUTO_START,
-            1000,
-            None,
-            None,
-        )
-        (credentials,) = reply.unpack()
-        pid, uid, handle = (
-            credentials.get(key) for key in ("ProcessID", "UnixUserID", "ProcessFD")
-        )
-        if (
-            type(pid) is not int
-            or pid <= 0
-            or type(uid) is not int
-            or uid != os.getuid()
-            or type(handle) is not int
-            or descriptors is None
-            or not 0 <= handle < descriptors.get_length() <= 16
-        ):
-            return None
         with ExitStack() as cleanup:
-            process = descriptors.get(handle)
-            cleanup.callback(os.close, process)
-            if select.select([process], [], [], 0)[0]:
-                return None
-            with open(f"/proc/self/fdinfo/{process}", "rb") as info:
-                metadata = info.read(1025)
-            if len(metadata) > 1024 or f"Pid:\t{pid}\n".encode() not in metadata:
-                return None
+            pid, process = cleanup.enter_context(process_handle(bus, bus.bus, owner))
             directory = os.open(
                 f"/proc/{pid}", os.O_PATH | os.O_DIRECTORY | os.O_CLOEXEC
             )
@@ -132,7 +101,8 @@ def desktop_id(bus, owner):
             entries = bus.Gio.AppInfo.get_all()
             if len(entries) > 4096:
                 return None
-            identities = set()
+            registered = session_identities(bus, entries, pid, process)
+            identities = set(registered[0])
             key = executable.st_dev, executable.st_ino
             for entry in entries:
                 if time.monotonic() >= bus.deadline:
@@ -154,6 +124,8 @@ def desktop_id(bus, owner):
                     identities.add(name)
                 except (OSError, ValueError):
                     return None
+            if session_identities(bus, entries, pid, process) != registered:
+                return None
             current = os.stat("exe", dir_fd=directory)
             cwd = os.stat("cwd", dir_fd=directory)
             if (

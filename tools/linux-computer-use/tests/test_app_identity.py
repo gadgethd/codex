@@ -15,6 +15,7 @@ from codex_linux_computer_use.app_identity import desktop_id, matches
 def entry(name, command, working_directory=None):
     return SimpleNamespace(
         get_id=lambda: name,
+        get_boolean=lambda key: False,
         get_commandline=lambda: command,
         get_string=lambda key: working_directory,
     )
@@ -261,3 +262,88 @@ class IdentityTests(unittest.TestCase):
                 (cwd.st_dev, cwd.st_ino),
             )
         )
+
+    def prepare_session(self):
+        item = entry("org.example.Private.desktop", None)
+        item.get_boolean = lambda key: True
+        self.entries.append(item)
+        self.bus.Gio.dbus_is_name = lambda name: "." in name
+        self.bus.GLib.Variant = lambda signature, values: values
+        self.bus.session = SimpleNamespace(
+            call_sync=Mock(
+                side_effect=lambda *args: SimpleNamespace(
+                    unpack=lambda: (
+                        ["org.example.Private"] if args[3] == "ListNames" else ":1.3",
+                    )
+                )
+            ),
+            call_with_unix_fd_list_sync=self.bus.bus.call_with_unix_fd_list_sync,
+        )
+
+    def test_session_identity_matches_process_and_preserves_exec_ambiguity(self):
+        self.prepare_session()
+        self.assertIsNone(desktop_id(self.bus, ":1.2"))
+        self.entries.pop(0)
+        self.assertEqual(desktop_id(self.bus, ":1.2"), "org.example.Private.desktop")
+        self.entries.append(entry("other.desktop", "/bin/true"))
+        self.assertEqual(desktop_id(self.bus, ":1.2"), "org.example.Private.desktop")
+        self.bus.session.call_with_unix_fd_list_sync = Mock(
+            return_value=(
+                SimpleNamespace(
+                    unpack=lambda: ({**self.credentials, "ProcessFD": None},)
+                ),
+                None,
+            )
+        )
+        self.assertIsNone(desktop_id(self.bus, ":1.2"))
+
+    def test_session_name_owned_by_other_process_is_not_this_app(self):
+        self.prepare_session()
+        with subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(60)"]
+        ) as child:
+            handle = process_handle(child.pid)
+            try:
+
+                def duplicate(index):
+                    descriptor = os.dup(handle)
+                    self.duplicates.append(descriptor)
+                    return descriptor
+
+                self.bus.session.call_with_unix_fd_list_sync = Mock(
+                    return_value=(
+                        SimpleNamespace(
+                            unpack=lambda: (
+                                {**self.credentials, "ProcessID": child.pid},
+                            )
+                        ),
+                        SimpleNamespace(get_length=lambda: 1, get=duplicate),
+                    )
+                )
+                self.assertEqual(desktop_id(self.bus, ":1.2"), "fixture.desktop")
+                self.entries.pop(0)
+                self.assertIsNone(desktop_id(self.bus, ":1.2"))
+            finally:
+                child.terminate()
+                child.wait(timeout=5)
+                os.close(handle)
+
+    def test_session_ownership_changes_and_registry_limits_are_unknown(self):
+        self.prepare_session()
+        self.entries.pop(0)
+        self.bus.session.call_sync.side_effect = [
+            SimpleNamespace(unpack=lambda value=value: (value,))
+            for value in (
+                ["org.example.Private"],
+                ":1.3",
+                ["org.example.Private"],
+                ":1.4",
+            )
+        ]
+        self.assertIsNone(desktop_id(self.bus, ":1.2"))
+        for names in (["org.example.Private"] * 4097, ["x" * 256], [3]):
+            self.bus.session.call_sync.side_effect = None
+            self.bus.session.call_sync.return_value = SimpleNamespace(
+                unpack=lambda names=names: (names,)
+            )
+            self.assertIsNone(desktop_id(self.bus, ":1.2"))

@@ -10,6 +10,7 @@ from pathlib import Path
 
 import gi
 from accessibility import activate_button, verify_text
+from dbus_identity import verify_activation
 from mcp import Client, StdioServerParameters
 
 gi.require_version("GdkPixbuf", "2.0")
@@ -173,6 +174,7 @@ async def exercise(output, spawn):
             )
             proc.terminate()
             await asyncio.to_thread(proc.wait, timeout=5)
+        await verify_activation(bus, call, output, launchers, wait_file)
         await call("stop_session")
         assert session_paths() == [], "Portal session survived stop_session"
         stopped = await client.call_tool(
