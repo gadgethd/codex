@@ -59,6 +59,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
                         "start_session",
                         "screenshot",
                         "stop_session",
+                        "list_apps",
                         "move_pointer",
                         "click",
                         "drag",
@@ -183,6 +184,44 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
             result = await client.call_tool("start_session")
             self.assertTrue(result.is_error)
             self.assertIn("requires Linux policy metadata", result.content[0].text)
+
+    async def test_app_discovery_is_guarded_by_policy_lock_and_cursor_validation(self):
+        with patch(
+            "codex_linux_computer_use.apps.list_apps", return_value='{"apps":[]}'
+        ) as discover:
+            async with Client(self.server) as client:
+                for args, policy in [
+                    ({}, None),
+                    ({}, {**self.policy, "enabled": False}),
+                    ({}, {**self.policy, "desktopIds": {"denied.desktop": "deny"}}),
+                    ({"cursor": True}, self.policy),
+                    ({"cursor": 4096}, self.policy),
+                ]:
+                    result = await client.call_tool(
+                        "list_apps", args, meta={"codex/linuxComputerUsePolicy": policy}
+                    )
+                    self.assertTrue(result.is_error)
+                self.lock_check.side_effect = [True]
+                result = await client.call_tool(
+                    "list_apps", meta={"codex/linuxComputerUsePolicy": self.policy}
+                )
+                self.assertTrue(result.is_error)
+                discover.assert_not_called()
+                self.lock_check.side_effect = [False, False]
+                result = await client.call_tool(
+                    "list_apps",
+                    {"cursor": 8},
+                    meta={"codex/linuxComputerUsePolicy": self.policy},
+                )
+                self.assertFalse(result.is_error)
+                self.assertEqual(result.content[0].text, '{"apps":[]}')
+                discover.assert_called_once_with(8)
+                self.lock_check.side_effect = [False, True]
+                result = await client.call_tool(
+                    "list_apps", meta={"codex/linuxComputerUsePolicy": self.policy}
+                )
+                self.assertTrue(result.is_error)
+                self.assertNotIn('"apps"', result.content[0].text)
 
 
 if __name__ == "__main__":

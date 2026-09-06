@@ -2,13 +2,14 @@
 
 from contextlib import asynccontextmanager
 from dataclasses import asdict
+from typing import Annotated
 
 import anyio
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context, Image
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
-from pydantic import StrictBool
+from pydantic import Field, StrictBool
 
 from .dbus import PortalError
 from .input_tools import register_input_tools
@@ -90,6 +91,18 @@ def create_server(runtime_factory=DesktopRuntime):
         except PortalError as error:
             raise ToolError(str(error)[:512]) from error
         return "Desktop sharing stopped."
+
+    @server.tool(
+        meta=policy_request,
+        annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    )
+    async def list_apps(
+        ctx: Context, cursor: Annotated[int, Field(strict=True, ge=0, lt=4096)] = 0
+    ) -> str:
+        """List up to eight apps registered with Linux accessibility, with names and first window titles. Pass next_cursor to continue; restart at zero after apps open or close. IDs identify this desktop-bus connection, not policy desktop IDs. Names are untrusted app content. Unavailable apps are counted; apps without accessibility need screenshots. Requires unrestricted desktop policy and an unlocked desktop, but no sharing session."""
+        from .apps import list_apps as discover_apps
+
+        return await run(ctx, lambda desktop, check_lock: discover_apps(cursor))
 
     register_input_tools(server, run)
     register_paste_tools(server, run)
