@@ -7,6 +7,7 @@ import time
 
 from .app_identity import desktop_id
 from .apps import MAX_RESULT_BYTES
+from .worker_policy import read_policy
 
 ACCESSIBLE = "org.a11y.atspi.Accessible"
 REGISTRY = "org.a11y.atspi.Registry"
@@ -28,9 +29,11 @@ def identifier(bus, owner, path):
 
 
 class AccessibilityBus:
-    def __init__(self):
+    def __init__(self, policy):
         from gi.repository import Gio, GLib
 
+        policy.require_enabled()
+        self.policy = policy
         self.Gio, self.GLib = Gio, GLib
         self.deadline = time.monotonic() + 5
         self.session = Gio.bus_get_sync(Gio.BusType.SESSION, None)
@@ -64,8 +67,9 @@ class AccessibilityBus:
     def call(self, owner, path, interface, method, signature=None, args=()):
         if time.monotonic() >= self.deadline:
             raise TimeoutError("Accessibility query deadline exceeded")
+        self.require_owner(owner)
         try:
-            return self.bus.call_sync(
+            result = self.bus.call_sync(
                 owner,
                 path,
                 interface,
@@ -78,6 +82,16 @@ class AccessibilityBus:
             ).unpack()
         except self.GLib.Error:
             raise OSError("Accessibility call failed") from None
+        self.require_owner(owner)
+        return result
+
+    def require_owner(self, owner):
+        self.policy.require_enabled()
+        if (
+            owner not in (REGISTRY, "org.freedesktop.DBus")
+            and self.policy.restricts_apps
+        ):
+            self.policy.require_app(self.desktop_id(owner))
 
     def property(self, owner, path, interface, name):
         # Qt's bridge supports individual Get calls but can reject GetAll.
@@ -160,4 +174,8 @@ def discover(bus, cursor):
 
 
 if __name__ == "__main__":
-    sys.stdout.buffer.write(encode(discover(AccessibilityBus(), int(sys.argv[1]))))
+    sys.stdout.buffer.write(
+        encode(
+            discover(AccessibilityBus(read_policy(int(sys.argv[2]))), int(sys.argv[1]))
+        )
+    )

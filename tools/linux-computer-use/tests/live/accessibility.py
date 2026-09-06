@@ -28,7 +28,7 @@ async def verify_text(call, app_id, expected):
     raise AssertionError("The editor tree exceeded the fixture node limit")
 
 
-async def activate_button(call, app_id):
+async def button_action(call, app_id):
     paths = [[]]
     for _ in range(32):
         assert paths, "The fixture button is missing"
@@ -43,15 +43,15 @@ async def activate_button(call, app_id):
             args = {"app_id": app_id, "node_id": node["id"], "path": path}
             listing = json.loads((await call("get_actions", args)).content[0].text)
             action = listing["actions"][0]
-            result = await call(
-                "perform_action",
-                {
-                    **args,
-                    "action_index": action["index"],
-                    "action_name": action["name"],
-                },
-            )
-            assert result.structured_content == {"accepted": True}
-            return
+            return {
+                **args,
+                "action_index": action["index"],
+                "action_name": action["name"],
+            }
         paths.extend(child["path"] for child in page["children"])
     raise AssertionError("Fixture button traversal exceeded its limit")
+
+
+async def activate_button(call, app_id):
+    result = await call("perform_action", await button_action(call, app_id))
+    assert result.structured_content == {"accepted": True}

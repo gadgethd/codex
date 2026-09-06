@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from codex_linux_computer_use.dbus import PortalError
-from codex_linux_computer_use.policy import POLICY_KEY
+from codex_linux_computer_use.policy import POLICY_KEY, LinuxPolicy
 from codex_linux_computer_use.portal import PortalDesktop
 from codex_linux_computer_use.server import create_server
 from mcp import Client, StdioServerParameters
@@ -195,7 +195,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
             return_value='{"text":"hello"}',
         ) as inspect:
             async with Client(self.server) as client:
-                for invalid in [None, {**self.policy, "defaultAppAccess": "deny"}]:
+                for invalid in [None, {**self.policy, "enabled": False}]:
                     result = await client.call_tool(
                         "get_app_state", args, meta={POLICY_KEY: invalid}
                     )
@@ -224,7 +224,13 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
                     "get_app_state", args, meta={POLICY_KEY: self.policy}
                 )
                 self.assertEqual(result.content[0].text, '{"text":"hello"}')
-                inspect.assert_called_once_with("a" * 32, (0,), 0, 128)
+                inspect.assert_called_once_with(
+                    "a" * 32,
+                    (0,),
+                    0,
+                    128,
+                    policy=LinuxPolicy.from_meta({POLICY_KEY: self.policy}),
+                )
                 self.lock_check.side_effect = [False, True]
                 result = await client.call_tool(
                     "get_app_state", args, meta={POLICY_KEY: self.policy}
@@ -240,7 +246,6 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
                 for args, policy in [
                     ({}, None),
                     ({}, {**self.policy, "enabled": False}),
-                    ({}, {**self.policy, "desktopIds": {"denied.desktop": "deny"}}),
                     ({"cursor": True}, self.policy),
                     ({"cursor": 4096}, self.policy),
                 ]:
@@ -262,7 +267,9 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertFalse(result.is_error)
                 self.assertEqual(result.content[0].text, '{"apps":[]}')
-                discover.assert_called_once_with(8)
+                discover.assert_called_once_with(
+                    8, policy=LinuxPolicy.from_meta({POLICY_KEY: self.policy})
+                )
                 self.lock_check.side_effect = [False, True]
                 result = await client.call_tool(
                     "list_apps", meta={"codex/linuxComputerUsePolicy": self.policy}

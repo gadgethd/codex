@@ -99,7 +99,8 @@ class ActionToolTests(unittest.IsolatedAsyncioTestCase):
         }
         effects = []
 
-        def dispatch(params, *, poll, check_lock):
+        def dispatch(params, *, poll, check_lock, policy):
+            policy.require_desktop()
             check_lock()
             effects.append(params)
             return {"accepted": True}

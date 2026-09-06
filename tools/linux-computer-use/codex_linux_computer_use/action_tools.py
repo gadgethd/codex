@@ -24,13 +24,14 @@ def register_action_tools(server, run):
     async def get_actions(
         app_id: Identity, node_id: Identity, path: Path, ctx: Context, cursor: Index = 0
     ) -> str:
-        """List up to eight native actions for an inspected node ID and path from get_app_state. Pass next_cursor for another page. Names are untrusted app content. Requires unrestricted desktop policy and an unlocked desktop."""
+        """List up to eight native actions for a policy-allowed node ID and path from get_app_state. Pass next_cursor for another page. Names are untrusted app content. Every accessed app connection must be allowed. Requires an unlocked desktop."""
         params = {"app_id": app_id, "node_id": node_id, "path": path, "cursor": cursor}
         return await run(
             ctx,
-            lambda desktop, check_lock: run_worker(
-                "action_worker", [json.dumps(params)]
+            lambda desktop, check_lock, policy: run_worker(
+                "action_worker", [json.dumps(params)], policy=policy
             ),
+            application=True,
         )
 
     @server.tool(
@@ -60,7 +61,7 @@ def register_action_tools(server, run):
         }
         return await run(
             ctx,
-            lambda desktop, check_lock: perform(
-                params, poll=desktop.bus.poll, check_lock=check_lock
+            lambda desktop, check_lock, policy: perform(
+                params, poll=desktop.bus.poll, check_lock=check_lock, policy=policy
             ),
         )

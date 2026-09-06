@@ -225,11 +225,11 @@ has an eight-second lifetime, including native connection setup and shutdown.
 
 The opaque app IDs are tied to the accessibility bus, connection and root
 object. They are not desktop-file IDs or authorization evidence. App-provided
-names and titles are untrusted content. Discovery uses the same host policy and
-real lock checks as capture, including a second lock check before returning
-results, and currently requires unrestricted desktop access. It does not require
-an open sharing session. Apps without accessibility registration still need
-screenshots; per-app policy enforcement and targeted actions remain in #4.
+names and titles are untrusted content. Discovery uses effective host app policy
+and real lock checks, including a second check before returning results. Denied
+apps and identities unknown under restricted policy count as unavailable. It does
+not require an open sharing session. Apps without accessibility registration still need
+screenshots; broader app-policy coverage remains in #4.
 The KDE smoke checks GTK/Qt discovery and stable IDs, and the GNOME CLI smoke
 checks that the real client forwards the discovered GTK editor to the model.
 
@@ -244,7 +244,8 @@ process-handle support, stale processes, ambiguous launchers and unsupported
 launch expansions produce `null`. Inherited desktop groups and
 app-provided labels are not used to establish this identity. Desktop entries
 describe launch identities, not isolation from hostile programs running as the
-same Unix user. This evidence does not yet relax the full-desktop policy check.
+same Unix user. Discovery and inspection use this identity for app permissions;
+unknown identities are permitted only under unrestricted desktop policy.
 
 `get_app_state` inspects an ID returned by `list_apps`. Start with `path=[]`,
 then use a returned child's path to descend into its controls. Each call returns
@@ -257,15 +258,17 @@ Paths contain at most 16 child indices; each level is capped at 4096 children.
 `limited` reports a depth or child-count limit, and `unavailable` counts failed
 child reads. Refresh from the app root after the UI changes: child indices are
 navigation hints, not stable action targets. Node IDs identify accessible objects
-on this bus; neither app nor node IDs establish authorization. Inspection retains
-the full-desktop policy and lock checks. The KDE smoke verifies exact GTK/Qt text
+on this bus; neither app nor node IDs establish authorization. Inspection checks
+the effective app policy before and after each native read, including embedded
+connections, and retains real lock checks. The KDE smoke verifies exact GTK/Qt text
 through accessibility, and the GNOME CLI smoke forwards an inspected window.
 
 Use `get_actions` with an inspected app ID, node ID and path to list a control's
-native actions. Pass the exact returned index and name to `perform_action`.
+native actions under the same app-read policy. Pass the exact returned index and
+name to `perform_action`.
 The service resolves the target again and checks for changed action names.
 Before dispatch, its worker waits for fresh lock and cancellation checks.
-Calls retain the existing full-desktop policy requirement and bounded worker
+Performing actions retains the full-desktop policy requirement and bounded worker
 lifetime; an error after dispatch reports an uncertain outcome. Inspect the app
 before retrying: acceptance does not establish the desired UI result, and an
 action can affect external state. The KDE smoke activates real GTK/Qt buttons

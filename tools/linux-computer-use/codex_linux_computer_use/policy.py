@@ -49,10 +49,27 @@ class LinuxPolicy:
             value["allowLockedComputerUse"],
         )
 
-    def require_desktop(self):
+    def require_enabled(self):
         if not self.enabled:
             raise PortalError("Computer use is disabled by Codex policy.")
-        if self.default_app_access != "allow" or "deny" in self.desktop_ids.values():
+
+    @property
+    def restricts_apps(self):
+        return self.default_app_access != "allow" or "deny" in self.desktop_ids.values()
+
+    def require_app(self, desktop_id):
+        self.require_enabled()
+        if desktop_id is None:
+            if self.restricts_apps:
+                raise PermissionError(
+                    "Application identity is unknown under this policy."
+                )
+        elif self.desktop_ids.get(desktop_id, self.default_app_access) != "allow":
+            raise PermissionError("Application access is denied by Codex policy.")
+
+    def require_desktop(self):
+        self.require_enabled()
+        if self.restricts_apps:
             raise PortalError(
                 "Full-desktop capture and input are unavailable under this application policy."
             )

@@ -10,6 +10,7 @@ from pathlib import Path
 
 import gi
 from accessibility import activate_button, verify_text
+from app_policy import verify_reads
 from dbus_identity import verify_activation
 from mcp import Client, StdioServerParameters
 
@@ -94,9 +95,9 @@ async def exercise(output, spawn):
     results = []
     async with Client(transport, read_timeout_seconds=150) as client:
 
-        async def call(name, args=None):
+        async def call(name, args=None, *, policy=POLICY):
             result = await client.call_tool(
-                name, args or {}, meta={"codex/linuxComputerUsePolicy": POLICY}
+                name, args or {}, meta={"codex/linuxComputerUsePolicy": policy}
             )
             assert not result.is_error, (name, result.content)
             return result
@@ -156,6 +157,14 @@ async def exercise(output, spawn):
             await call("paste_text", {"text": TEXT})
             await wait_file(fixture / "text.txt", TEXT)
             await verify_text(call, found["id"], TEXT)
+            await verify_reads(
+                client,
+                call,
+                found,
+                launchers / f"codex-fixture-{name}.desktop",
+                TEXT,
+                POLICY,
+            )
             (fixture / "read-clipboard").touch()
             await wait_file(fixture / "clipboard.txt", PREVIOUS)
             assert await capture(f"{name}-pasted") > before + 50, (
@@ -170,11 +179,12 @@ async def exercise(output, spawn):
                     "exact_unicode": True,
                     "clipboard_restored": True,
                     "accessibility_text": True,
+                    "per_app_reads": True,
                 }
             )
             proc.terminate()
             await asyncio.to_thread(proc.wait, timeout=5)
-        await verify_activation(bus, call, output, launchers, wait_file)
+        await verify_activation(bus, client, call, output, launchers, wait_file, POLICY)
         await call("stop_session")
         assert session_paths() == [], "Portal session survived stop_session"
         stopped = await client.call_tool(
