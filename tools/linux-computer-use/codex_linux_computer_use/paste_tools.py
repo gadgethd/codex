@@ -40,7 +40,7 @@ def register_paste_tools(server, run):
         if len(data) > 16384 or "\0" in text:
             raise ToolError("Paste text must fit 16 KiB UTF-8 and contain no NUL.")
 
-        def action(desktop, check_lock):
+        def action(desktop, check_lock, policy):
             desktop.check_open()
             content = desktop.clipboard
             if content is None:

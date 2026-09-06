@@ -13,6 +13,7 @@ from .apps_worker import (
     identifier,
     label,
 )
+from .worker_policy import read_policy
 
 TEXT = "org.a11y.atspi.Text"
 STATES = {
@@ -150,7 +151,7 @@ if __name__ == "__main__":
     sys.stdout.buffer.write(
         encode(
             inspect_app(
-                AccessibilityBus(),
+                AccessibilityBus(read_policy(int(sys.argv[5]))),
                 sys.argv[1],
                 json.loads(sys.argv[2]),
                 int(sys.argv[3]),

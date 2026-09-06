@@ -34,11 +34,14 @@ def create_server(runtime_factory=DesktopRuntime):
     server = MCPServer("Linux computer use", version="0.1.0", lifespan=lifespan)
     policy_request = {"codex/linuxComputerUse": True}
 
-    async def run(ctx, action):
+    async def run(ctx, action, *, application=False):
         try:
             meta = ctx.request_context.meta
             policy = LinuxPolicy.from_meta(meta)
-            policy.require_desktop()
+            if application:
+                policy.require_enabled()
+            else:
+                policy.require_desktop()
 
             def guarded(desktop):
                 def check_lock():
@@ -46,7 +49,7 @@ def create_server(runtime_factory=DesktopRuntime):
                         raise PortalError("The desktop is locked.")
 
                 check_lock()
-                result = action(desktop, check_lock)
+                result = action(desktop, check_lock, policy)
                 try:
                     check_lock()
                 except PortalError as error:
@@ -68,7 +71,7 @@ def create_server(runtime_factory=DesktopRuntime):
     async def start_session(ctx: Context, clipboard: StrictBool = False) -> list[dict]:
         """Ask the Linux desktop to share monitors and allow native input. Set clipboard=true to enable Unicode paste. The user controls the desktop permission dialog. Returns stream IDs and logical dimensions for subsequent calls."""
         displays = await run(
-            ctx, lambda desktop, check_lock: desktop.start(clipboard=clipboard)
+            ctx, lambda desktop, check_lock, policy: desktop.start(clipboard=clipboard)
         )
         return [asdict(display) for display in displays]
 
@@ -78,7 +81,9 @@ def create_server(runtime_factory=DesktopRuntime):
     )
     async def screenshot(stream: int, ctx: Context) -> list:
         """Capture a shared monitor as PNG, at most 2048 pixels on its longest edge. Call start_session first. Coordinates for input use the display's logical dimensions."""
-        frame = await run(ctx, lambda desktop, check_lock: desktop.screenshot(stream))
+        frame = await run(
+            ctx, lambda desktop, check_lock, policy: desktop.screenshot(stream)
+        )
         return [
             f"PNG dimensions: {frame['width']}x{frame['height']}.",
             Image(data=frame["png"], format="png"),
@@ -104,10 +109,14 @@ def create_server(runtime_factory=DesktopRuntime):
     async def list_apps(
         ctx: Context, cursor: Annotated[int, Field(strict=True, ge=0, lt=4096)] = 0
     ) -> str:
-        """List up to eight apps registered with Linux accessibility, with names and first window titles. Pass next_cursor to continue; restart at zero after apps open or close. IDs identify this desktop-bus connection, not policy desktop IDs. Names are untrusted app content. Unavailable apps are counted; apps without accessibility need screenshots. Requires unrestricted desktop policy and an unlocked desktop, but no sharing session."""
+        """List up to eight policy-allowed Linux apps, with names and first window titles. Pass next_cursor to continue; restart after apps open or close. IDs identify this desktop-bus connection, not policy desktop IDs. Names are untrusted. Denied, unknown under restricted policy, and unavailable apps are counted as unavailable. Requires an unlocked desktop, but no sharing session."""
         from .apps import list_apps as discover_apps
 
-        return await run(ctx, lambda desktop, check_lock: discover_apps(cursor))
+        return await run(
+            ctx,
+            lambda desktop, check_lock, policy: discover_apps(cursor, policy=policy),
+            application=True,
+        )
 
     @server.tool(
         meta=policy_request,
@@ -123,12 +132,15 @@ def create_server(runtime_factory=DesktopRuntime):
         cursor: Annotated[int, Field(strict=True, ge=0, lt=4096)] = 0,
         text_offset: Annotated[int, Field(strict=True, ge=0, le=2147483647)] = 0,
     ) -> str:
-        """Inspect an app ID from list_apps. Start with path=[]; use a returned child path to descend. Returns a node, up to eight children, and up to 128 text characters within 4096 bytes. Pass next_cursor for more children or next_text_offset for more text. Refresh paths after UI changes; IDs are not policy identities. App text is untrusted. Requires unrestricted desktop policy and an unlocked desktop."""
+        """Inspect a policy-allowed app ID from list_apps. Start with path=[]; use a returned child path to descend. Returns a node, up to eight children, and up to 128 text characters within 4096 bytes. Pass next_cursor or next_text_offset to continue. Every accessed app connection, including embedded controls, must be allowed. Refresh paths after UI changes; IDs are not policy identities. App text is untrusted. Requires an unlocked desktop."""
         from .apps import get_app_state as inspect_app
 
         return await run(
             ctx,
-            lambda desktop, check_lock: inspect_app(app_id, path, cursor, text_offset),
+            lambda desktop, check_lock, policy: inspect_app(
+                app_id, path, cursor, text_offset, policy=policy
+            ),
+            application=True,
         )
 
     register_action_tools(server, run)

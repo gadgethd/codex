@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import json
+import os
 import sys
 import threading
 import time
@@ -48,6 +49,12 @@ def images_in(value):
 
 
 async def exercise(output, codex, spawn):
+    launchers = Path(os.environ["XDG_DATA_HOME"]) / "applications"
+    launchers.mkdir()
+    (launchers / "codex-fixture-gtk.desktop").write_text(
+        "[Desktop Entry]\nType=Application\nName=Codex GTK fixture\n"
+        f"Exec={sys.executable} {HERE / 'gtk_fixture.py'} %F\n"
+    )
     gtk = output / "gtk"
     gtk.mkdir()
     spawn("gtk", [sys.executable, str(HERE / "gtk_fixture.py"), str(gtk)])
@@ -65,13 +72,21 @@ async def exercise(output, codex, spawn):
         ("list_apps", {}),
         ("get_app_state", {}),
     ]
-    for policy in ("deny", "allow"):
+    for policy in ("deny", "allow", "app-only"):
         run = output / policy
         run.mkdir()
         if policy == "allow":
             spawn("consent", [sys.executable, str(HERE / "consent.py")])
         await run_policy(
-            run, codex, gtk, steps if policy == "allow" else steps[:1], policy
+            run,
+            codex,
+            gtk,
+            steps
+            if policy == "allow"
+            else steps[-2:]
+            if policy == "app-only"
+            else steps[:1],
+            policy,
         )
 
 
@@ -105,7 +120,7 @@ async def run_policy(run, codex, gtk, calls, policy):
                         if t.get("name") == "mcp__linux_computer_use"
                     )
                     assert "paste_text" in {t["name"] for t in namespace["tools"]}
-                if number == 1:
+                if number == 1 and policy != "app-only":
                     result = next(
                         i["output"]
                         for i in body["input"]
@@ -131,7 +146,12 @@ async def run_policy(run, codex, gtk, calls, policy):
                     wait_file(gtk / "text.txt", TEXT)
                     (gtk / "read-clipboard").touch()
                     wait_file(gtk / "clipboard.txt", PREVIOUS)
-                if policy == "allow" and number in (10, 11):
+                if (
+                    policy == "allow"
+                    and number in (10, 11)
+                    or policy == "app-only"
+                    and number in (1, 2)
+                ):
                     apps = next(
                         item["output"]
                         for item in body["input"]
@@ -139,10 +159,14 @@ async def run_policy(run, codex, gtk, calls, policy):
                         and item.get("call_id") == f"call-{number - 1}"
                     )
                     assert "Codex GTK paste fixture" in str(apps)
-                    if number == 10:
+                    if number in (1, 10):
                         discovered = json.loads(
                             json.loads(apps[apps.index("{") :])["result"]
                         )
+                        if policy == "app-only":
+                            assert [
+                                app["desktop_id"] for app in discovered["apps"]
+                            ] == ["codex-fixture-gtk.desktop"]
                         state["app_id"] = next(
                             app["id"]
                             for app in discovered["apps"]
@@ -214,7 +238,7 @@ async def run_policy(run, codex, gtk, calls, policy):
         "model_providers.smoke.stream_max_retries": 0,
         "features.code_mode": False,
         "features.apps": False,
-        "computer_use.default_app_access": policy,
+        "computer_use.default_app_access": "deny" if policy == "app-only" else policy,
         "mcp_servers.linux_computer_use.command": sys.executable,
         "mcp_servers.linux_computer_use.args": ["-m", "codex_linux_computer_use"],
         "mcp_servers.linux_computer_use.cwd": str(HERE.parents[1]),
@@ -252,6 +276,13 @@ async def run_policy(run, codex, gtk, calls, policy):
     ]
     for key, value in config.items():
         args.extend(["-c", key + "=" + json.dumps(value)])
+    if policy == "app-only":
+        args.extend(
+            [
+                "-c",
+                'computer_use.linux.desktop_ids={"codex-fixture-gtk.desktop"="allow"}',
+            ]
+        )
     args.append("Exercise the scripted native Linux smoke test in the private desktop.")
     try:
         with (run / "cli.jsonl").open("w") as log:
@@ -262,7 +293,7 @@ async def run_policy(run, codex, gtk, calls, policy):
         assert code == 0 and state["error"] is None, state
         assert state["requests"] == len(calls) + 1, state
         assert state["images"] == (3 if policy == "allow" else 0), state
-        if policy == "allow":
+        if policy in ("allow", "app-only"):
             completed = []
             for line in (run / "cli.jsonl").read_text().splitlines():
                 try:

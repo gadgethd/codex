@@ -5,10 +5,11 @@ import json
 import sys
 from pathlib import Path
 
+from app_policy import verify_reads
 from gi.repository import Gio, GLib
 
 
-async def verify_activation(bus, call, output, launchers, wait_file):
+async def verify_activation(bus, client, call, output, launchers, wait_file, policy):
     root = output / "dbus"
     root.mkdir()
     name = "com.example.CodexPasteFixture"
@@ -49,6 +50,8 @@ async def verify_activation(bus, call, output, launchers, wait_file):
             assert found["desktop_id"] == expected, found
             if expected is None:
                 generic.unlink()
+        await verify_reads(client, call, found, desktop, "", policy)
+        assert not (root / "activated").exists()
         (root / "quit").touch()
         for _ in range(100):
             owned = bus.call_sync(
@@ -67,7 +70,14 @@ async def verify_activation(bus, call, output, launchers, wait_file):
             await asyncio.sleep(0.1)
         assert not owned, "Activated application survived its quit request"
         (root / "result.json").write_text(
-            json.dumps({"activated": True, "ambiguity": True, "stopped": True})
+            json.dumps(
+                {
+                    "activated": True,
+                    "ambiguity": True,
+                    "stopped": True,
+                    "per_app_reads": True,
+                }
+            )
         )
     finally:
         (root / "quit").touch()

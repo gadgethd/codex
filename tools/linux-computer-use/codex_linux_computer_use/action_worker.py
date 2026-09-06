@@ -6,6 +6,7 @@ import sys
 from .apps import MAX_RESULT_BYTES
 from .apps_worker import AccessibilityBus, encode, identifier
 from .state_worker import count, resolve
+from .worker_policy import read_policy
 
 ACTION = "org.a11y.atspi.Action"
 
@@ -72,7 +73,12 @@ if __name__ == "__main__":
             raise ValueError("Action dispatch cancelled")
 
     params = json.loads(sys.argv[1])
+    policy = read_policy(int(sys.argv[2]))
+    if "action_index" in params:
+        policy.require_desktop()
     result = actions(
-        AccessibilityBus(), params, authorize if "action_index" in params else None
+        AccessibilityBus(policy),
+        params,
+        authorize if "action_index" in params else None,
     )
     sys.stdout.buffer.write(encode(result))

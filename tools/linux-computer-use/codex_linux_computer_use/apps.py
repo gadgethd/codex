@@ -8,18 +8,19 @@ import tempfile
 from pathlib import Path
 
 from .dbus import PortalError
+from .worker_policy import policy_file
 
 MAX_RESULT_BYTES = 4096
 DISCOVERY_TIMEOUT = 8
 
 
-def list_apps(cursor=0):
+def list_apps(cursor=0, *, policy=None):
     if type(cursor) is not int or not 0 <= cursor < 4096:
         raise ValueError("Application cursor must be between 0 and 4095.")
-    return run_worker("apps_worker", [str(cursor)])
+    return run_worker("apps_worker", [str(cursor)], policy=policy)
 
 
-def get_app_state(app_id, path=(), cursor=0, text_offset=0):
+def get_app_state(app_id, path=(), cursor=0, text_offset=0, *, policy=None):
     if not isinstance(app_id, str) or not re.fullmatch(r"[0-9a-f]{32}", app_id):
         raise ValueError("Use an application ID returned by list_apps.")
     if (
@@ -33,12 +34,18 @@ def get_app_state(app_id, path=(), cursor=0, text_offset=0):
     ):
         raise ValueError("Invalid accessibility path, cursor or text offset.")
     return run_worker(
-        "state_worker", [app_id, json.dumps(path), str(cursor), str(text_offset)]
+        "state_worker",
+        [app_id, json.dumps(path), str(cursor), str(text_offset)],
+        policy=policy,
     )
 
 
-def run_worker(module, args):
-    with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
+def run_worker(module, args, *, policy=None):
+    with (
+        tempfile.TemporaryFile() as output,
+        tempfile.TemporaryFile() as errors,
+        policy_file(policy) as policy_fd,
+    ):
         try:
             result = subprocess.run(
                 [
@@ -46,9 +53,11 @@ def run_worker(module, args):
                     "-m",
                     f"codex_linux_computer_use.{module}",
                     *args,
+                    str(policy_fd),
                 ],
                 cwd=Path(__file__).resolve().parent.parent,
                 stdin=subprocess.DEVNULL,
+                pass_fds=(policy_fd,),
                 stdout=output,
                 stderr=errors,
                 timeout=DISCOVERY_TIMEOUT,
@@ -61,7 +70,9 @@ def run_worker(module, args):
         except OSError as error:
             raise PortalError("Cannot start application discovery.") from error
         if result.returncode:
-            raise PortalError("Linux accessibility is unavailable or discovery failed.")
+            raise PortalError(
+                "Application is unavailable, denied by policy, or its inspection failed."
+            )
         output.seek(0)
         data = output.read(MAX_RESULT_BYTES + 1)
     try:

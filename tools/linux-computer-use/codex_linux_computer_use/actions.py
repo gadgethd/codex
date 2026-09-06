@@ -11,24 +11,28 @@ from pathlib import Path
 
 from .apps import DISCOVERY_TIMEOUT, MAX_RESULT_BYTES
 from .dbus import PortalError
+from .worker_policy import policy_file
 
 
-def perform(params, *, poll, check_lock):
+def perform(params, *, poll, check_lock, policy=None):
     granted = False
     prepared = False
     try:
         with (
             selectors.DefaultSelector() as ready,
             tempfile.TemporaryFile() as errors,
+            policy_file(policy) as policy_fd,
             subprocess.Popen(
                 [
                     sys.executable,
                     "-m",
                     "codex_linux_computer_use.action_worker",
                     json.dumps(params),
+                    str(policy_fd),
                 ],
                 cwd=Path(__file__).resolve().parent.parent,
                 stdin=subprocess.PIPE,
+                pass_fds=(policy_fd,),
                 stdout=subprocess.PIPE,
                 stderr=errors,
                 bufsize=0,
