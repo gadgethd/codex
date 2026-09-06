@@ -86,6 +86,9 @@ async def desktop():
         spawn("portal-kde", ["/usr/libexec/xdg-desktop-portal-kde"])
         spawn("portal", ["/usr/libexec/xdg-desktop-portal"])
         await ready("org.freedesktop.portal.Desktop")
+        from doctor import verify
+
+        await verify(OUTPUT)
         versions = await asyncio.to_thread(
             subprocess.run,
             [

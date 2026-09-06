@@ -83,6 +83,9 @@ async def desktop(output, codex):
         spawn("portal-gnome", ["/usr/libexec/xdg-desktop-portal-gnome"])
         spawn("portal", ["/usr/libexec/xdg-desktop-portal"])
         await ready("org.freedesktop.portal.Desktop")
+        from doctor import verify
+
+        await verify(output)
         if codex is not None:
             from cli_scenario import exercise
 
