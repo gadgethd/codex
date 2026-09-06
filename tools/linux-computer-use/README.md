@@ -65,6 +65,23 @@ does not supply that desktop's connection variables. The service has been
 verified through the rebuilt Codex CLI on an isolated Fedora 44 GNOME desktop:
 host policy, session creation, one image forwarded to the model, and cleanup.
 
+Run `venv/bin/codex-linux-computer-use --doctor` from that session to diagnose
+setup. It prints JSON for MCP/GObject/GStreamer dependencies, required capture
+plugins, running portal capabilities, lock state, session identity support and
+accessibility launcher presence. Exit status 0 means these prerequisites passed; 1 means a check
+was unavailable or inconclusive. Each of two native probes has a 15-second
+deadline and bounded output; a timed-out worker is stopped and reaped.
+
+The command does not activate desktop services, request sharing, read application
+content or alter permissions. Missing services may therefore need to be started
+by the desktop before rerunning. Reports omit raw errors and bus addresses.
+The accessibility launcher's `GetAddress` method can start its bus, so diagnostics
+only checks launcher presence. Verify AT-SPI transport and app identity using
+`list_apps` through the host's permission checks. Passing diagnostics does not prove
+host policy authorization, desktop consent, working capture/input, or application compatibility; verify those through the
+client and intended apps. Native GNOME/KDE fixtures run these diagnostics before
+their sharing tests.
+
 Input tools use the logical display dimensions returned by `start_session`;
 scale screenshot coordinates when its PNG dimensions differ. `move_pointer`,
 `click`, `drag` and `scroll` take a shared stream ID and positions within that
