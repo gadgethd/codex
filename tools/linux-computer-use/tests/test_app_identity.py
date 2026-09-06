@@ -83,6 +83,8 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual(desktop_id(self.bus, ":1.2"), "fixture.desktop")
         self.entries.append(entry("alias.desktop", self.command, os.getcwd()))
         self.assertIsNone(desktop_id(self.bus, ":1.2"))
+        self.entries[-1] = entry("x" * 512 + ".desktop", self.command, os.getcwd())
+        self.assertIsNone(desktop_id(self.bus, ":1.2"))
 
     def test_credentials_missing_mismatched_or_without_process_handle_are_unknown(self):
         for changes in [
@@ -187,9 +189,11 @@ class IdentityTests(unittest.TestCase):
             (f"{sys.executable} /fixture.py %F", True),
             (f"{sys.executable} /fixture.py", False),
             (f"{sys.executable} /other.py %F", False),
-            (f"{sys.executable} /fixture.py %F --other", False),
-            (f"{sys.executable} /fixture.py %c", False),
-            ("/missing-program /fixture.py", False),
+            (f"{sys.executable} /fixture.py %F --other", None),
+            (f"{sys.executable} /fixture.py %c", None),
+            (None, False),
+            ("", False),
+            ("/missing-program /fixture.py", None),
             ("/bin/true /fixture.py", False),
         ]:
             with self.subTest(command=command):
@@ -214,10 +218,46 @@ class IdentityTests(unittest.TestCase):
             )
         relative = [sys.executable, "fixture.py"]
         command = f"{sys.executable} fixture.py"
-        for path, expected in [(None, False), ("/", False), (os.getcwd(), True)]:
+        for path, expected in [(None, None), ("/", False), (os.getcwd(), True)]:
             self.assertEqual(
                 matches(
                     entry("fixture.desktop", command, path), executable, relative, cwd
                 ),
                 expected,
             )
+
+    def test_generic_launcher_cannot_hide_an_uncertain_specific_launcher(self):
+        for suffix, specific in [
+            (["--mode=private"], "--mode=private"),
+            (["private.txt"], "%c"),
+            (["private.txt"], "private.txt"),
+        ]:
+            with self.subTest(suffix=suffix, specific=specific):
+                self.entries = [
+                    entry("public.desktop", f"{sys.executable} /app.py %F"),
+                    entry("private.desktop", f"{sys.executable} /app.py {specific}"),
+                ]
+                with patch(
+                    "codex_linux_computer_use.app_identity.process_arguments",
+                    return_value=[sys.executable, "/app.py", *suffix],
+                ):
+                    self.assertIsNone(desktop_id(self.bus, ":1.2"))
+                    self.entries.reverse()
+                    self.assertIsNone(desktop_id(self.bus, ":1.2"))
+        info, cwd = os.stat(sys.executable), os.stat(".")
+        self.assertIsNone(
+            matches(
+                entry("generic.desktop", f"{sys.executable} /app.py %F"),
+                (info.st_dev, info.st_ino),
+                [sys.executable, "/app.py", "--mode=private"],
+                (cwd.st_dev, cwd.st_ino),
+            )
+        )
+        self.assertTrue(
+            matches(
+                entry("literal.desktop", f"{sys.executable} /app.py -- %F"),
+                (info.st_dev, info.st_ino),
+                [sys.executable, "/app.py", "--", "--document"],
+                (cwd.st_dev, cwd.st_ino),
+            )
+        )
