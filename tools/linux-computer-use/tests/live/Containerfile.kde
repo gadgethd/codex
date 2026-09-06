@@ -1,0 +1,21 @@
+FROM registry.fedoraproject.org/fedora@sha256:125c2106ffaa3b2035c5bb480355c6bee73f723bfab47012bb29269d97ec61e4
+LABEL io.codex.task="linux-computer-use"
+RUN dnf -y install kwin plasma-workspace xdg-desktop-portal xdg-desktop-portal-kde \
+    pipewire wireplumber pipewire-gstreamer dbus-daemon python3-gobject \
+    python3-pip python3-pyqt6-base python3-gstreamer1 gtk4 at-spi2-core \
+    mesa-dri-drivers gstreamer1-plugins-base gstreamer1-plugins-good \
+    && dnf clean all
+# Fedora requests CAP_SYS_NICE on this binary. Drop that request so KWin can
+# run inside a rootless container without adding privileges.
+RUN python3 -c 'import os; os.removexattr("/usr/bin/kwin_wayland", "security.capability")'
+RUN python3 -m venv --system-site-packages /opt/cua
+COPY requirements.txt /opt/service/requirements.txt
+RUN /opt/cua/bin/python -m pip install --no-cache-dir -r /opt/service/requirements.txt
+COPY codex_linux_computer_use/*.py /opt/service/codex_linux_computer_use/
+COPY tests/live/*.py /opt/service/tests/live/
+RUN useradd --uid 1000 --create-home tester
+USER tester
+WORKDIR /opt/service
+ENV PATH="/opt/cua/bin:/usr/local/bin:/usr/bin:/bin"
+ENV PYTHONPATH="/opt/service"
+CMD ["python", "tests/live/kde_smoke.py"]
