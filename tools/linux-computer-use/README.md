@@ -233,6 +233,14 @@ screenshots; per-app policy enforcement and targeted actions remain in #4.
 The KDE smoke checks GTK/Qt discovery and stable IDs, and the GNOME CLI smoke
 checks that the real client forwards the discovered GTK editor to the model.
 
+Discovery also reports `desktop_id` when authenticated process credentials,
+the live executable and fixed launch arguments match one installed desktop
+entry. Missing process-handle support, stale processes, ambiguous launchers and
+unsupported launch expansions produce `null`. Inherited desktop groups and
+app-provided labels are not used to establish this identity. Desktop entries
+describe launch identities, not isolation from hostile programs running as the
+same Unix user. This evidence does not yet relax the full-desktop policy check.
+
 `get_app_state` inspects an ID returned by `list_apps`. Start with `path=[]`,
 then use a returned child's path to descend into its controls. Each call returns
 the selected node's role, name, relevant states, and up to eight children. Use
