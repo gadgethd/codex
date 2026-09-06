@@ -161,3 +161,28 @@ and stops its test processes. Logs and `result.json` remain in the output
 directory. It preserves only basic user/path environment values so inherited
 accessibility or PipeWire addresses cannot select the host desktop. A companion
 consent helper is restricted to this private session for subsequent input tests.
+
+To exercise a built fork CLI as well, add `--codex` and use a new output path:
+
+```sh
+tools/linux-computer-use/.venv/bin/python \
+  tools/linux-computer-use/tests/live/gnome_smoke.py \
+  --codex codex-rs/target/debug/codex \
+  --output /tmp/codex-linux-cli-results
+```
+
+This uses a local scripted Responses provider and the real stdio MCP service.
+It checks host default-deny, then explicitly approves the private test server's
+input tools and verifies exact Unicode in GTK, restored clipboard text, three
+screenshots at the model-input boundary, and successful sharing cleanup. Both
+seeded text and HTML clipboard markers must stay out of model requests. Results,
+CLI events and screenshot evidence are saved under `deny/` and `allow/`. The
+script ignores user configuration and retains the desktop's consent dialog;
+the test helper operates that dialog only within its private session.
+
+This verifies the client integration, not autonomous model behavior. The fixture
+coordinates match the fresh Fedora 44 GNOME desktop; other desktops still need
+separate live coverage. In ordinary interactive sessions, Codex can request
+approval for native input tools. Noninteractive runs must explicitly configure
+approved tools according to their intended scope; the smoke test supplies this
+configuration only to its disposable client invocation.

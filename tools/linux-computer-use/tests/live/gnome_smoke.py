@@ -13,7 +13,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 
 
-async def desktop(output):
+async def desktop(output, codex):
     from gi.repository import Gio, GLib
 
     children, logs = [], []
@@ -83,6 +83,11 @@ async def desktop(output):
         spawn("portal-gnome", ["/usr/libexec/xdg-desktop-portal-gnome"])
         spawn("portal", ["/usr/libexec/xdg-desktop-portal"])
         await ready("org.freedesktop.portal.Desktop")
+        if codex is not None:
+            from cli_scenario import exercise
+
+            await exercise(output, codex, spawn)
+            return
         fixture = output / "gtk"
         fixture.mkdir()
         proc = spawn(
@@ -119,15 +124,19 @@ def main():
     parser.add_argument(
         "--output", type=Path, required=True, help="New evidence directory"
     )
+    parser.add_argument("--codex", type=Path, help="Also verify this built Codex CLI")
     parser.add_argument("--child", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     output = args.output.resolve()
+    codex = args.codex.resolve() if args.codex else None
+    if codex is not None and not os.access(codex, os.X_OK):
+        parser.error("--codex must name an executable fork build")
     if args.child:
         assert os.environ["XDG_RUNTIME_DIR"] == os.environ["CUA_PRIVATE_RUNTIME"]
         assert os.environ["XDG_RUNTIME_DIR"].startswith(
             "/tmp/cua-"
         ) and not os.environ.get("DISPLAY")
-        asyncio.run(desktop(output))
+        asyncio.run(desktop(output, codex))
         return
     if sys.platform != "linux":
         parser.error("A Linux desktop is required")
@@ -168,6 +177,7 @@ def main():
                 "--child",
                 "--output",
                 str(output),
+                *(["--codex", str(codex)] if codex is not None else []),
             ],
             env=env,
             check=False,
