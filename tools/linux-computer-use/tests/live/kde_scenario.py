@@ -127,6 +127,11 @@ async def exercise(output, spawn):
             )
             await wait_file(fixture / "ready")
             await asyncio.sleep(1)
+            titles = {"gtk": "Codex GTK paste fixture", "qt": "Codex Qt paste fixture"}
+            apps = json.loads((await call("list_apps")).content[0].text)["apps"]
+            found = next(app for app in apps if app["window"] == titles[name])
+            refreshed = json.loads((await call("list_apps")).content[0].text)["apps"]
+            assert found in refreshed, "Application identity changed between queries"
             before = await capture(f"{name}-before")
             assert before < 50, "The editor should be blank before paste"
             # These coordinates select the editor in the fresh 1280x720 desktop.

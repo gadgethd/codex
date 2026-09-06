@@ -214,3 +214,21 @@ versions, exact editor/clipboard observations and four screenshots remain there
 after the container exits. The permission helper approves only this private test
 desktop and disables future-session restoration. This is a Fedora KDE test,
 not a claim of coverage for every distribution or GPU.
+
+`list_apps` discovers apps registered with the current session's AT-SPI
+accessibility bus, including their name, toolkit and first window title. It
+returns up to eight records within 4096 UTF-8 bytes; pass `next_cursor` to get
+another page. Restart from zero when apps open or close. Each page scans at most
+16 registry entries, with a total ceiling of 4096 entries. Unresponsive entries
+are counted as `unavailable`; `limited` reports the registry ceiling. The worker
+has an eight-second lifetime, including native connection setup and shutdown.
+
+The opaque app IDs are tied to the accessibility bus, connection and root
+object. They are not desktop-file IDs or authorization evidence. App-provided
+names and titles are untrusted content. Discovery uses the same host policy and
+real lock checks as capture, including a second lock check before returning
+results, and currently requires unrestricted desktop access. It does not require
+an open sharing session. Apps without accessibility registration still need
+screenshots; per-app policy enforcement and targeted actions remain in #4.
+The KDE smoke checks GTK/Qt discovery and stable IDs, and the GNOME CLI smoke
+checks that the real client forwards the discovered GTK editor to the model.

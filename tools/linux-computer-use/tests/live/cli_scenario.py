@@ -62,6 +62,7 @@ async def exercise(output, codex, spawn):
         ("paste_text", {"text": TEXT}),
         ("screenshot", {}),
         ("stop_session", {}),
+        ("list_apps", {}),
     ]
     for policy in ("deny", "allow"):
         run = output / policy
@@ -129,6 +130,14 @@ async def run_policy(run, codex, gtk, calls, policy):
                     wait_file(gtk / "text.txt", TEXT)
                     (gtk / "read-clipboard").touch()
                     wait_file(gtk / "clipboard.txt", PREVIOUS)
+                if policy == "allow" and number == len(calls):
+                    apps = next(
+                        item["output"]
+                        for item in body["input"]
+                        if item.get("type") == "function_call_output"
+                        and item.get("call_id") == f"call-{len(calls) - 1}"
+                    )
+                    assert "Codex GTK paste fixture" in str(apps)
                 if number < len(calls):
                     name, args = calls[number]
                     args = dict(args)
