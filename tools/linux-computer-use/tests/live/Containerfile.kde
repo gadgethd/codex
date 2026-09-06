@@ -12,10 +12,12 @@ RUN python3 -m venv --system-site-packages /opt/cua
 COPY requirements.txt /opt/service/requirements.txt
 RUN /opt/cua/bin/python -m pip install --no-cache-dir -r /opt/service/requirements.txt
 COPY codex_linux_computer_use/*.py /opt/service/codex_linux_computer_use/
-COPY tests/live/*.py /opt/service/tests/live/
+COPY pyproject.toml README.md LICENSE NOTICE /opt/service/
+RUN /opt/cua/bin/python -m pip install --no-cache-dir /opt/service \
+    && rm -rf /opt/service
+COPY tests/live/*.py /opt/fixtures/tests/live/
 RUN useradd --uid 1000 --create-home tester
 USER tester
-WORKDIR /opt/service
+WORKDIR /opt/fixtures
 ENV PATH="/opt/cua/bin:/usr/local/bin:/usr/bin:/bin"
-ENV PYTHONPATH="/opt/service"
 CMD ["python", "tests/live/kde_smoke.py"]

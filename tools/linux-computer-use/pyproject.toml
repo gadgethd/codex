@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codex-linux-computer-use"
+version = "0.1.0"
+description = "Native Linux desktop MCP service for Codex hosts with Linux policy support"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+dynamic = ["dependencies"]
+
+[project.scripts]
+codex-linux-computer-use = "codex_linux_computer_use.__main__:main"
+
+[tool.setuptools]
+packages = ["codex_linux_computer_use"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}

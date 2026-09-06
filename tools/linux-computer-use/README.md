@@ -23,17 +23,20 @@ GStreamer runs in a separate process with a twelve-second deadline covering
 startup, capture and shutdown. A stalled pipeline is terminated and reaped so
 the desktop runtime can report an error and still close its session.
 
-Create an environment with access to the distribution's desktop bindings and
-install the MCP dependency:
+Install the service into an environment with access to the distribution's desktop
+bindings. Use the system Python associated with those bindings:
 
 ```sh
 cd tools/linux-computer-use
-python3 -m venv --system-site-packages .venv
-.venv/bin/python -m pip install -r requirements.txt
+python3 -m venv --system-site-packages "$HOME/.local/share/codex-linux-computer-use/venv"
+"$HOME/.local/share/codex-linux-computer-use/venv/bin/python" -m pip install .
 ```
 
-Run the service with `.venv/bin/python -m codex_linux_computer_use` from this
-directory. The Codex host must support the `codex/linuxComputerUsePolicy` request
+Run the installed `venv/bin/codex-linux-computer-use` command from any directory.
+The installation copies the service, including its subprocess workers, so it no
+longer needs the checkout at runtime. It does not install native system packages,
+alter Codex configuration, or grant desktop access. After changing the source,
+install it again to update the service. The Codex host must support the `codex/linuxComputerUsePolicy` request
 metadata used by this fork. Tools reject missing or invalid policy; supplying
 policy as a tool argument cannot grant access. Each call combines user and
 managed restrictions from the host's captured configuration. Full-monitor
@@ -42,15 +45,13 @@ of the desktop. Lock state is checked before and after an operation, and an
 unknown state prevents access. `stop_session` remains available after policy
 changes so the client can release desktop sharing.
 
-Add the following to the fork's Codex configuration, replacing both absolute
-paths with your checkout location. The environment allowlist is required because
+Add the following to the fork's Codex configuration, replacing the absolute
+command path with your installation location. The environment allowlist is required because
 stdio MCP servers do not inherit desktop connection variables by default.
 
 ```toml
 [mcp_servers.linux_computer_use]
-command = "/absolute/path/to/codex/tools/linux-computer-use/.venv/bin/python"
-args = ["-m", "codex_linux_computer_use"]
-cwd = "/absolute/path/to/codex/tools/linux-computer-use"
+command = "/home/YOUR_USER/.local/share/codex-linux-computer-use/venv/bin/codex-linux-computer-use"
 tool_timeout_sec = 150
 env_vars = [
   "DBUS_SESSION_BUS_ADDRESS", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY",
@@ -83,8 +84,17 @@ Tests mock the desktop transport and do not open permission prompts:
 
 ```sh
 cd tools/linux-computer-use
-PYTHONPATH=. .venv/bin/python -m unittest discover -s tests -v
+"$HOME/.local/share/codex-linux-computer-use/venv/bin/python" -m unittest discover -s tests -v
 ```
+
+To produce distributable artifacts, install the Python `build` tool and run
+`python3 -m build` in this directory. It creates a source archive and a wheel
+rebuilt from that archive in `dist/`. Install the wheel into a system-site-packages
+environment as above; no package has been published to a public registry.
+CI builds and installs these artifacts on Python 3.10 and 3.14, checks MCP startup
+and policy denial from an unrelated directory, then runs the protocol suite
+against the installed package. Native desktop fixtures also use the installed
+service, including its worker processes.
 
 `PortalDesktop.start()` negotiates a combined capture/input session and returns
 shared displays with stream IDs and logical dimensions. `stop()` preserves state
@@ -150,7 +160,7 @@ it is not yet the cross-distribution verification matrix.
 From the repository root, using the environment described above:
 
 ```sh
-tools/linux-computer-use/.venv/bin/python \
+"$HOME/.local/share/codex-linux-computer-use/venv/bin/python" \
   tools/linux-computer-use/tests/live/gnome_smoke.py \
   --output /tmp/codex-linux-fixture-results
 ```
@@ -165,7 +175,7 @@ consent helper is restricted to this private session for subsequent input tests.
 To exercise a built fork CLI as well, add `--codex` and use a new output path:
 
 ```sh
-tools/linux-computer-use/.venv/bin/python \
+"$HOME/.local/share/codex-linux-computer-use/venv/bin/python" \
   tools/linux-computer-use/tests/live/gnome_smoke.py \
   --codex codex-rs/target/debug/codex \
   --output /tmp/codex-linux-cli-results

@@ -1,8 +1,14 @@
 import sys
 
-from .server import create_server
 
-if sys.platform != "linux":
-    raise SystemExit("Native Linux computer use requires a Linux desktop session.")
+def main():
+    if sys.platform != "linux":
+        raise SystemExit("Native Linux computer use requires a Linux desktop session.")
 
-create_server().run(transport="stdio")
+    from .server import create_server
+
+    create_server().run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()
