@@ -60,6 +60,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
                         "screenshot",
                         "stop_session",
                         "list_apps",
+                        "get_app_state",
                         "move_pointer",
                         "click",
                         "drag",
@@ -184,6 +185,50 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
             result = await client.call_tool("start_session")
             self.assertTrue(result.is_error)
             self.assertIn("requires Linux policy metadata", result.content[0].text)
+
+    async def test_app_state_is_guarded_and_validates_paths(self):
+        args = {"app_id": "a" * 32, "path": [0], "text_offset": 128}
+        with patch(
+            "codex_linux_computer_use.apps.get_app_state",
+            return_value='{"text":"hello"}',
+        ) as inspect:
+            async with Client(self.server) as client:
+                for invalid in [None, {**self.policy, "defaultAppAccess": "deny"}]:
+                    result = await client.call_tool(
+                        "get_app_state", args, meta={POLICY_KEY: invalid}
+                    )
+                    self.assertTrue(result.is_error)
+                for changed in [
+                    {"app_id": "bad"},
+                    {"path": [True]},
+                    {"path": [0] * 17},
+                    {"cursor": -1},
+                    {"text_offset": True},
+                ]:
+                    result = await client.call_tool(
+                        "get_app_state",
+                        {**args, **changed},
+                        meta={POLICY_KEY: self.policy},
+                    )
+                    self.assertTrue(result.is_error)
+                self.lock_check.side_effect = [True]
+                result = await client.call_tool(
+                    "get_app_state", args, meta={POLICY_KEY: self.policy}
+                )
+                self.assertTrue(result.is_error)
+                inspect.assert_not_called()
+                self.lock_check.side_effect = [False, False]
+                result = await client.call_tool(
+                    "get_app_state", args, meta={POLICY_KEY: self.policy}
+                )
+                self.assertEqual(result.content[0].text, '{"text":"hello"}')
+                inspect.assert_called_once_with("a" * 32, (0,), 0, 128)
+                self.lock_check.side_effect = [False, True]
+                result = await client.call_tool(
+                    "get_app_state", args, meta={POLICY_KEY: self.policy}
+                )
+                self.assertTrue(result.is_error)
+                self.assertNotIn("hello", result.content[0].text)
 
     async def test_app_discovery_is_guarded_by_policy_lock_and_cursor_validation(self):
         with patch(

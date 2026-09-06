@@ -232,3 +232,18 @@ an open sharing session. Apps without accessibility registration still need
 screenshots; per-app policy enforcement and targeted actions remain in #4.
 The KDE smoke checks GTK/Qt discovery and stable IDs, and the GNOME CLI smoke
 checks that the real client forwards the discovered GTK editor to the model.
+
+`get_app_state` inspects an ID returned by `list_apps`. Start with `path=[]`,
+then use a returned child's path to descend into its controls. Each call returns
+the selected node's role, name, relevant states, and up to eight children. Use
+`next_cursor` to page through children and `next_text_offset` to read subsequent
+128-character text ranges. Password-role text is not read. Results share the
+4096-byte output cap and eight-second worker lifetime used by discovery.
+
+Paths contain at most 16 child indices; each level is capped at 4096 children.
+`limited` reports a depth or child-count limit, and `unavailable` counts failed
+child reads. Refresh from the app root after the UI changes: child indices are
+navigation hints, not stable action targets. Node IDs identify accessible objects
+on this bus; neither app nor node IDs establish authorization. Inspection retains
+the full-desktop policy and lock checks. The KDE smoke verifies exact GTK/Qt text
+through accessibility, and the GNOME CLI smoke forwards an inspected window.
