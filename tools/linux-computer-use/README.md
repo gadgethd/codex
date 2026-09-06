@@ -186,3 +186,31 @@ separate live coverage. In ordinary interactive sessions, Codex can request
 approval for native input tools. Noninteractive runs must explicitly configure
 approved tools according to their intended scope; the smoke test supplies this
 configuration only to its disposable client invocation.
+
+The KDE smoke test runs in a rootless Podman container with its own Wayland,
+D-Bus, accessibility, PipeWire and portal services. It checks service policy
+denial, native screenshots, exact Unicode in GTK and Qt, restored clipboard text,
+and sharing cleanup. It supplies test policy directly to MCP; the GNOME CLI test
+above covers the actual host boundary. KDE cancellation, revocation and other
+client configurations remain tracked in [#49](https://github.com/gadgethd/codex/issues/49).
+
+Build from this directory:
+
+```sh
+podman build -t codex-linux-kde -f tests/live/Containerfile.kde .
+mkdir /tmp/codex-kde-results
+podman run --rm --userns=keep-id \
+  --device nvidia.com/gpu=0 --security-opt label=disable \
+  -v /tmp/codex-kde-results:/output:Z codex-linux-kde
+```
+
+This invocation was verified on Fedora 44 with an NVIDIA GPU configured for
+Podman's CDI support. The SELinux label option applies only to that disposable
+container and permits its GPU access. Other GPU setups need their own device
+arguments: KWin's virtual backend requires working OpenGL rendering for capture;
+its QPainter fallback cannot stream the desktop. No host display or session-bus
+sockets should be mounted. The output directory must be empty. Logs, package
+versions, exact editor/clipboard observations and four screenshots remain there
+after the container exits. The permission helper approves only this private test
+desktop and disables future-session restoration. This is a Fedora KDE test,
+not a claim of coverage for every distribution or GPU.
