@@ -5,6 +5,7 @@ import json
 import sys
 import time
 
+from .app_identity import desktop_id
 from .apps import MAX_RESULT_BYTES
 
 ACCESSIBLE = "org.a11y.atspi.Accessible"
@@ -90,6 +91,9 @@ class AccessibilityBus:
         )
         return value
 
+    def desktop_id(self, owner):
+        return desktop_id(self, owner)
+
     def child(self, owner, path, index):
         (child,) = self.call(
             owner, path, ACCESSIBLE, "GetChildAtIndex", "(i)", (index,)
@@ -116,6 +120,7 @@ def discover(bus, cursor):
             owner, path = bus.child(REGISTRY, ROOT, index)
             app = {
                 "id": identifier(bus, owner, path),
+                "desktop_id": bus.desktop_id(owner),
                 "name": label(bus.property(owner, path, ACCESSIBLE, "Name"), 96),
                 "toolkit": label(
                     bus.property(
@@ -143,6 +148,10 @@ def discover(bus, cursor):
             continue
         candidate = {**result, "apps": [*result["apps"], app], "next_cursor": index + 1}
         if len(encode(candidate)) > MAX_RESULT_BYTES - 16:
+            if not result["apps"]:
+                result["unavailable"] += 1
+                index += 1
+                continue
             break
         result["apps"].append(app)
         index += 1

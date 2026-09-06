@@ -40,6 +40,14 @@ async def wait_file(path, expected=None):
 
 async def exercise(output, spawn):
     bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+    launchers = Path(os.environ["XDG_DATA_HOME"]) / "applications"
+    launchers.mkdir()
+    for name in ("gtk", "qt"):
+        (launchers / f"codex-fixture-{name}.desktop").write_text(
+            "[Desktop Entry]\nType=Application\n"
+            f"Name=Codex {name} fixture\n"
+            f"Exec={sys.executable} {HERE / f'{name}_fixture.py'} %F\n"
+        )
 
     def session_paths():
         paths = ["/org/freedesktop/portal/desktop/session"]
@@ -134,6 +142,7 @@ async def exercise(output, spawn):
             titles = {"gtk": "Codex GTK paste fixture", "qt": "Codex Qt paste fixture"}
             apps = json.loads((await call("list_apps")).content[0].text)["apps"]
             found = next(app for app in apps if app["window"] == titles[name])
+            assert found["desktop_id"] == f"codex-fixture-{name}.desktop", found
             refreshed = json.loads((await call("list_apps")).content[0].text)["apps"]
             assert found in refreshed, "Application identity changed between queries"
             before = await capture(f"{name}-before")

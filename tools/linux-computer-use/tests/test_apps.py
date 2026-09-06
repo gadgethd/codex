@@ -17,6 +17,9 @@ class AppBus:
         self.names = names
         self.failures = {}
 
+    def desktop_id(self, owner):
+        return None
+
     def property(self, owner, path, interface, name):
         if owner.startswith(":") and owner in self.failures:
             raise self.failures[owner]
@@ -44,6 +47,7 @@ class AppDiscoveryTests(unittest.TestCase):
                     :32
                 ],
                 "name": f"App {n}",
+                "desktop_id": None,
                 "toolkit": "GTK",
                 "window": "Editor",
             }
@@ -116,6 +120,21 @@ class AppDiscoveryTests(unittest.TestCase):
         bus.names = ["日本語🐧" * 1000]
         app = discover(bus, 0)["apps"][0]
         self.assertLessEqual(len(app["name"].encode()), 96)
+
+    def test_oversized_single_record_advances_to_the_next_application(self):
+        bus = AppBus(["Oversized", "Working"])
+        original = bus.property
+        bus.desktop_id = lambda owner: "\x01" * 504 + ".desktop"
+        bus.property = lambda owner, path, interface, name: (
+            "\x01" * 200
+            if owner == ":0" and name != "ChildCount"
+            else original(owner, path, interface, name)
+        )
+        page = discover(bus, 0)
+        self.assertEqual([app["name"] for app in page["apps"]], ["Working"])
+        self.assertEqual(page["unavailable"], 1)
+        self.assertIsNone(page["next_cursor"])
+        self.assertLessEqual(len(encode(page)), 4096)
 
 
 class AppWorkerTests(unittest.TestCase):
