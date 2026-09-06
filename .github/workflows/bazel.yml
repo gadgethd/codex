@@ -20,15 +20,15 @@ jobs:
     # signal without putting PR latency back on the critical path. When
     # Code-mode unit tests run on every Bazel target. When authenticated RBE
     # is available, the Windows-cross shards exercise the source-built V8 path.
-    timeout-minutes: 30
+    timeout-minutes: ${{ github.repository == 'openai/codex' && 30 || 90 }}
     strategy:
       fail-fast: false
       matrix:
         include:
           # macOS
-          - os: macos-15-xlarge
+          - os: ${{ github.repository == 'openai/codex' && 'macos-15-xlarge' || 'macos-15' }}
             target: aarch64-apple-darwin
-          - os: macos-15-xlarge
+          - os: ${{ github.repository == 'openai/codex' && 'macos-15-xlarge' || 'macos-15' }}
             target: x86_64-apple-darwin
 
           # Linux
@@ -133,7 +133,7 @@ jobs:
     # Split the Windows Bazel test leg across separate Windows hosts. Jobs with
     # BuildBuddy credentials use Linux RBE for build actions; test execution
     # remains on a Windows runner.
-    timeout-minutes: 30
+    timeout-minutes: ${{ github.repository == 'openai/codex' && 30 || 90 }}
     strategy:
       fail-fast: false
       matrix:
@@ -142,9 +142,10 @@ jobs:
           - 2
           - 3
           - 4
-    runs-on:
-      group: ${{ github.event.repository.name }}-runners
-      labels: ${{ github.event.repository.name }}-windows-x64
+    runs-on: >-
+      ${{ github.repository == 'openai/codex'
+          && fromJSON('{"group":"codex-runners","labels":"codex-windows-x64"}')
+          || 'windows-latest' }}
     name: Bazel test on windows-latest for x86_64-pc-windows-gnullvm shard ${{ matrix.shard }}/4
     environment:
       name: bazel
@@ -258,10 +259,11 @@ jobs:
     # 30-minute PR budget. Run this only for post-merge commits to main and give
     # it a larger timeout.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    timeout-minutes: 40
-    runs-on:
-      group: ${{ github.event.repository.name }}-runners
-      labels: ${{ github.event.repository.name }}-windows-x64
+    timeout-minutes: ${{ github.repository == 'openai/codex' && 40 || 90 }}
+    runs-on: >-
+      ${{ github.repository == 'openai/codex'
+          && fromJSON('{"group":"codex-runners","labels":"codex-windows-x64"}')
+          || 'windows-latest' }}
     name: Bazel test on windows-latest for x86_64-pc-windows-msvc (native main)
     environment:
       name: bazel
@@ -335,7 +337,7 @@ jobs:
         uses: ./.github/actions/check-clean-worktree
 
   clippy:
-    timeout-minutes: 30
+    timeout-minutes: ${{ github.repository == 'openai/codex' && 30 || 90 }}
     strategy:
       fail-fast: false
       matrix:
@@ -346,13 +348,14 @@ jobs:
           # that the Bazel test job uses.
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
-          - os: macos-15-xlarge
+          - os: ${{ github.repository == 'openai/codex' && 'macos-15-xlarge' || 'macos-15' }}
             target: aarch64-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-gnullvm
-            runs_on:
-              group: ${{ github.event.repository.name }}-runners
-              labels: ${{ github.event.repository.name }}-windows-x64
+            runs_on: >-
+              ${{ github.repository == 'openai/codex'
+                  && fromJSON('{"group":"codex-runners","labels":"codex-windows-x64"}')
+                  || 'windows-latest' }}
     runs-on: ${{ matrix.runs_on || matrix.os }}
     name: Bazel clippy on ${{ matrix.os }} for ${{ matrix.target }}
     environment:
@@ -438,20 +441,21 @@ jobs:
         uses: ./.github/actions/check-clean-worktree
 
   verify-release-build:
-    timeout-minutes: 30
+    timeout-minutes: ${{ github.repository == 'openai/codex' && 30 || 90 }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
-          - os: macos-15-xlarge
+          - os: ${{ github.repository == 'openai/codex' && 'macos-15-xlarge' || 'macos-15' }}
             target: aarch64-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-gnullvm
-            runs_on:
-              group: ${{ github.event.repository.name }}-runners
-              labels: ${{ github.event.repository.name }}-windows-x64
+            runs_on: >-
+              ${{ github.repository == 'openai/codex'
+                  && fromJSON('{"group":"codex-runners","labels":"codex-windows-x64"}')
+                  || 'windows-latest' }}
     runs-on: ${{ matrix.runs_on || matrix.os }}
     name: Verify release build on ${{ matrix.os }} for ${{ matrix.target }}
     environment:

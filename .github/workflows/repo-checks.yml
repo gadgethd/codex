@@ -26,6 +26,9 @@ jobs:
       - name: Verify Bazel clippy flags match Cargo workspace lints
         run: python3 .github/scripts/verify_bazel_clippy_lints.py
 
+      - name: Test Bazel CI platform selection
+        run: python3 .github/scripts/test_run_bazel_ci.py
+
       - name: Test Codex package builder
         run: python3 -m unittest discover -s scripts/codex_package -p 'test_*.py'
 

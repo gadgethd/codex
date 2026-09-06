@@ -280,6 +280,36 @@ def test_root_format_driver_covers_all_formatter_groups(
     ]
 
 
+def test_root_rust_formatter_batches_long_paths_without_losing_sources(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    script = _load_root_format_script_module()
+    rust_root = tmp_path / "codex-rs"
+    rust_root.mkdir()
+    names = [f"{index:03d}_{'long_name_' * 20}.rs" for index in range(100)] + ["-new.rs"]
+    for name in names:
+        (rust_root / name).touch()
+    monkeypatch.setattr(script, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(
+        script.subprocess,
+        "check_output",
+        lambda *args, **kwargs: b"\0".join(os.fsencode(f"codex-rs/{name}") for name in names),
+    )
+
+    for check in (False, True):
+        group = script.rust_formatter_group(check=check)
+        assert len(group.commands) > 1
+        actual = []
+        prefix_length = 7 + int(check)
+        for command in group.commands:
+            assert command.cwd == rust_root
+            assert sum(2 * len(os.fsencode(arg)) + 3 for arg in command.args) <= 24000
+            assert ("--check" in command.args) == check
+            actual.extend(command.args[prefix_length:])
+        assert actual == sorted([os.curdir + os.sep + "-new.rs", *names[:-1]])
+
+
 def test_root_format_driver_discards_successful_command_output(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
