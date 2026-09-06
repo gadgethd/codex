@@ -66,7 +66,7 @@ def node(bus, ref, path):
     }
 
 
-def inspect_app(bus, app_id, path, cursor, text_offset):
+def resolve(bus, app_id, path):
     app = None
     for index in range(min(count(bus, (REGISTRY, ROOT)), 4096)):
         try:
@@ -85,6 +85,11 @@ def inspect_app(bus, app_id, path, cursor, text_offset):
         if index >= count(bus, ref):
             raise ValueError("The accessible path changed; inspect its parent again.")
         ref = bus.child(*ref, index)
+    return app, ref
+
+
+def inspect_app(bus, app_id, path, cursor, text_offset):
+    app, ref = resolve(bus, app_id, path)
     current = node(bus, ref, path)
     result = {
         "node": current,

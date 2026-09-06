@@ -11,6 +11,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field, StrictBool
 
+from .action_tools import register_action_tools
 from .dbus import PortalError
 from .input_tools import register_input_tools
 from .paste_tools import register_paste_tools
@@ -46,8 +47,12 @@ def create_server(runtime_factory=DesktopRuntime):
 
                 check_lock()
                 result = action(desktop, check_lock)
-                if not policy.allow_locked_computer_use and is_locked(desktop.bus):
-                    raise PortalError("The desktop locked during this operation.")
+                try:
+                    check_lock()
+                except PortalError as error:
+                    raise PortalError(
+                        f"Operation outcome uncertain; inspect before retrying: {error}"
+                    ) from error
                 return result
 
             return await ctx.request_context.lifespan_context.run(guarded)
@@ -126,6 +131,7 @@ def create_server(runtime_factory=DesktopRuntime):
             lambda desktop, check_lock: inspect_app(app_id, path, cursor, text_offset),
         )
 
+    register_action_tools(server, run)
     register_input_tools(server, run)
     register_paste_tools(server, run)
     return server

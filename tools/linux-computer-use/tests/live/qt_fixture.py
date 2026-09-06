@@ -5,7 +5,13 @@ import sys
 from pathlib import Path
 
 from PyQt6.QtCore import QMimeData, QTimer
-from PyQt6.QtWidgets import QApplication, QPlainTextEdit
+from PyQt6.QtWidgets import (
+    QApplication,
+    QPlainTextEdit,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 assert os.environ["XDG_RUNTIME_DIR"] == os.environ["CUA_PRIVATE_RUNTIME"]
 assert not os.environ.get("DISPLAY")
@@ -13,15 +19,22 @@ root = Path(sys.argv[1])
 copied = reading = False
 app = QApplication([])
 view = QPlainTextEdit()
-view.setWindowTitle("Codex Qt paste fixture")
-view.resize(600, 400)
+window = QWidget()
+window.setWindowTitle("Codex Qt paste fixture")
+window.resize(600, 400)
+layout = QVBoxLayout(window)
+layout.setContentsMargins(0, 0, 0, 0)
+layout.addWidget(view)
+button = QPushButton("Record activation")
+button.clicked.connect(lambda: (root / "activated").write_text("1"))
+layout.addWidget(button)
 view.textChanged.connect(lambda: (root / "text.txt").write_text(view.toPlainText()))
 clipboard = app.clipboard()
 
 
 def poll():
     global copied, reading
-    if view.windowHandle().isExposed():
+    if window.windowHandle().isExposed():
         (root / "ready").touch()
     if (root / "copy-before").exists() and not copied:
         copied = True
@@ -35,7 +48,7 @@ def poll():
         (root / "clipboard.txt").write_text(clipboard.text())
 
 
-view.show()
+window.show()
 timer = QTimer()
 timer.timeout.connect(poll)
 timer.start(100)

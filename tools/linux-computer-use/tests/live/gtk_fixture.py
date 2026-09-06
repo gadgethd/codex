@@ -20,7 +20,13 @@ def activate(app):
     window = Gtk.ApplicationWindow(application=app, title="Codex GTK paste fixture")
     window.set_default_size(600, 400)
     view = Gtk.TextView()
-    window.set_child(view)
+    view.set_vexpand(True)
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+    box.append(view)
+    button = Gtk.Button(label="Record activation")
+    button.connect("clicked", lambda button: (root / "activated").write_text("1"))
+    box.append(button)
+    window.set_child(box)
     buffer = view.get_buffer()
     buffer.connect(
         "changed",
