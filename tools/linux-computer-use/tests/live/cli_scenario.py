@@ -250,9 +250,10 @@ async def run_policy(run, codex, gtk, calls, policy):
         "features.code_mode": False,
         "features.apps": False,
         "computer_use.default_app_access": "deny" if policy == "app-only" else policy,
-        "mcp_servers.linux_computer_use.command": sys.executable,
-        "mcp_servers.linux_computer_use.args": ["-m", "codex_linux_computer_use"],
-        "mcp_servers.linux_computer_use.cwd": str(HERE.parents[1]),
+        "mcp_servers.linux_computer_use.command": str(
+            Path(sys.executable).with_name("codex-linux-computer-use")
+        ),
+        "mcp_servers.linux_computer_use.cwd": str(run),
         "mcp_servers.linux_computer_use.env_vars": [
             "DBUS_SESSION_BUS_ADDRESS",
             "WAYLAND_DISPLAY",
