@@ -33,8 +33,8 @@ class AccessibilityBus:
 
         self.Gio, self.GLib = Gio, GLib
         self.deadline = time.monotonic() + 5
-        session = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-        address = session.call_sync(
+        self.session = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        address = self.session.call_sync(
             "org.a11y.Bus",
             "/org/a11y/bus",
             "org.a11y.Bus",

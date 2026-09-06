@@ -41,6 +41,9 @@ def activate(app):
 
     def poll():
         global copied, reading
+        if (root / "quit").exists():
+            app.quit()
+            return False
         if (root / "copy-before").exists() and not copied:
             copied = True
             clipboard.set_content(
