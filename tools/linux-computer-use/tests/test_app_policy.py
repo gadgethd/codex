@@ -85,7 +85,7 @@ class AppPolicyTests(unittest.TestCase):
 
 
 class AppPolicyProtocolTests(unittest.IsolatedAsyncioTestCase):
-    async def test_effective_app_policy_is_forwarded_but_desktop_and_actions_remain_restricted(
+    async def test_effective_app_policy_is_forwarded_but_desktop_remains_restricted(
         self,
     ):
         policy = {
@@ -108,20 +108,7 @@ class AppPolicyProtocolTests(unittest.IsolatedAsyncioTestCase):
                 discover.assert_called_once_with(
                     0, policy=LinuxPolicy.from_meta({POLICY_KEY: policy})
                 )
-                for tool, args in [
-                    ("start_session", {}),
-                    (
-                        "perform_action",
-                        {
-                            "app_id": "a" * 32,
-                            "node_id": "b" * 32,
-                            "path": [],
-                            "action_index": 0,
-                            "action_name": "click",
-                        },
-                    ),
-                ]:
-                    result = await client.call_tool(
-                        tool, args, meta={POLICY_KEY: policy}
-                    )
-                    self.assertTrue(result.is_error)
+                result = await client.call_tool(
+                    "start_session", meta={POLICY_KEY: policy}
+                )
+                self.assertTrue(result.is_error)

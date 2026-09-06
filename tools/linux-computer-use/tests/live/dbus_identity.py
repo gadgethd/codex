@@ -50,7 +50,9 @@ async def verify_activation(bus, client, call, output, launchers, wait_file, pol
             assert found["desktop_id"] == expected, found
             if expected is None:
                 generic.unlink()
-        await verify_reads(client, call, found, desktop, "", policy)
+        await verify_reads(
+            client, call, found, desktop, "", policy, root / "activated", wait_file
+        )
         assert not (root / "activated").exists()
         (root / "quit").touch()
         for _ in range(100):
@@ -76,6 +78,7 @@ async def verify_activation(bus, client, call, output, launchers, wait_file, pol
                     "ambiguity": True,
                     "stopped": True,
                     "per_app_reads": True,
+                    "per_app_actions": True,
                 }
             )
         )

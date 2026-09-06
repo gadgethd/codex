@@ -267,9 +267,9 @@ Use `get_actions` with an inspected app ID, node ID and path to list a control's
 native actions under the same app-read policy. Pass the exact returned index and
 name to `perform_action`.
 The service resolves the target again and checks for changed action names.
-Before dispatch, its worker waits for fresh lock and cancellation checks.
-Performing actions retains the full-desktop policy requirement and bounded worker
-lifetime; an error after dispatch reports an uncertain outcome. Inspect the app
+The target connection must be allowed by the effective app policy. Its worker
+finishes identity checks before waiting for fresh lock and cancellation checks,
+then invokes the action immediately. Actions retain the bounded worker lifetime; an error after dispatch reports an uncertain outcome. Inspect the app
 before retrying: acceptance does not establish the desired UI result, and an
 action can affect external state. The KDE smoke activates real GTK/Qt buttons
 and requires an independent observation from each app.

@@ -1,4 +1,4 @@
-"""Native control actions behind the existing effective desktop policy guard."""
+"""Native control actions behind the effective application policy guard."""
 
 import json
 from typing import Annotated
@@ -51,7 +51,7 @@ def register_action_tools(server, run):
         action_name: Name,
         ctx: Context,
     ) -> dict[str, bool]:
-        """Invoke the exact index and name returned by get_actions on an inspected node. Rechecks the target, policy, lock and cancellation before dispatch. Actions can change app or external state. On error, inspect the app before retrying because it may have acted. An accepted result is not proof of the desired UI outcome. Requires unrestricted desktop policy."""
+        """Invoke the exact index and name returned by get_actions on an inspected node. Rechecks the target, policy, lock and cancellation before dispatch. Actions can change app or external state. On error, inspect the app before retrying because it may have acted. An accepted result is not proof of the desired UI outcome. Every accessed app connection must be allowed. Requires an unlocked desktop."""
         params = {
             "app_id": app_id,
             "node_id": node_id,
@@ -64,4 +64,5 @@ def register_action_tools(server, run):
             lambda desktop, check_lock, policy: perform(
                 params, poll=desktop.bus.poll, check_lock=check_lock, policy=policy
             ),
+            application=True,
         )

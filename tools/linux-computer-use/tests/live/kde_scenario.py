@@ -164,6 +164,8 @@ async def exercise(output, spawn):
                 launchers / f"codex-fixture-{name}.desktop",
                 TEXT,
                 POLICY,
+                fixture / "activated",
+                wait_file,
             )
             (fixture / "read-clipboard").touch()
             await wait_file(fixture / "clipboard.txt", PREVIOUS)
@@ -180,6 +182,7 @@ async def exercise(output, spawn):
                     "clipboard_restored": True,
                     "accessibility_text": True,
                     "per_app_reads": True,
+                    "per_app_actions": True,
                 }
             )
             proc.terminate()
