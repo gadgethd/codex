@@ -247,3 +247,13 @@ navigation hints, not stable action targets. Node IDs identify accessible object
 on this bus; neither app nor node IDs establish authorization. Inspection retains
 the full-desktop policy and lock checks. The KDE smoke verifies exact GTK/Qt text
 through accessibility, and the GNOME CLI smoke forwards an inspected window.
+
+Use `get_actions` with an inspected app ID, node ID and path to list a control's
+native actions. Pass the exact returned index and name to `perform_action`.
+The service resolves the target again and checks for changed action names.
+Before dispatch, its worker waits for fresh lock and cancellation checks.
+Calls retain the existing full-desktop policy requirement and bounded worker
+lifetime; an error after dispatch reports an uncertain outcome. Inspect the app
+before retrying: acceptance does not establish the desired UI result, and an
+action can affect external state. The KDE smoke activates real GTK/Qt buttons
+and requires an independent observation from each app.

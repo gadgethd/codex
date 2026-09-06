@@ -61,6 +61,8 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
                         "stop_session",
                         "list_apps",
                         "get_app_state",
+                        "get_actions",
+                        "perform_action",
                         "move_pointer",
                         "click",
                         "drag",

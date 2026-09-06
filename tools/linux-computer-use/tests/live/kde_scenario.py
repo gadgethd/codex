@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import gi
-from accessibility import verify_text
+from accessibility import activate_button, verify_text
 from mcp import Client, StdioServerParameters
 
 gi.require_version("GdkPixbuf", "2.0")
@@ -151,6 +151,9 @@ async def exercise(output, spawn):
             assert await capture(f"{name}-pasted") > before + 50, (
                 "Pasted text was not rendered"
             )
+            assert not (fixture / "activated").exists()
+            await activate_button(call, found["id"])
+            await wait_file(fixture / "activated", "1")
             results.append(
                 {
                     "app": name,
