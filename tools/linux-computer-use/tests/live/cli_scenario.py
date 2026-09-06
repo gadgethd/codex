@@ -63,6 +63,7 @@ async def exercise(output, codex, spawn):
         ("screenshot", {}),
         ("stop_session", {}),
         ("list_apps", {}),
+        ("get_app_state", {}),
     ]
     for policy in ("deny", "allow"):
         run = output / policy
@@ -130,17 +131,28 @@ async def run_policy(run, codex, gtk, calls, policy):
                     wait_file(gtk / "text.txt", TEXT)
                     (gtk / "read-clipboard").touch()
                     wait_file(gtk / "clipboard.txt", PREVIOUS)
-                if policy == "allow" and number == len(calls):
+                if policy == "allow" and number in (10, 11):
                     apps = next(
                         item["output"]
                         for item in body["input"]
                         if item.get("type") == "function_call_output"
-                        and item.get("call_id") == f"call-{len(calls) - 1}"
+                        and item.get("call_id") == f"call-{number - 1}"
                     )
                     assert "Codex GTK paste fixture" in str(apps)
+                    if number == 10:
+                        discovered = json.loads(
+                            json.loads(apps[apps.index("{") :])["result"]
+                        )
+                        state["app_id"] = next(
+                            app["id"]
+                            for app in discovered["apps"]
+                            if app["window"] == "Codex GTK paste fixture"
+                        )
                 if number < len(calls):
                     name, args = calls[number]
                     args = dict(args)
+                    if name == "get_app_state":
+                        args["app_id"] = state["app_id"]
                     if name in ("click", "screenshot"):
                         args["stream"] = state["stream"]
                     item = {

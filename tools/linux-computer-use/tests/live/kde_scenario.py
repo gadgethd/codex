@@ -9,13 +9,17 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import gi
+from accessibility import verify_text
 from mcp import Client, StdioServerParameters
 
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import GdkPixbuf, Gio
 
 HERE = Path(__file__).resolve().parent
-TEXT = "KDE native paste — café Ελληνικά 日本語 🐧\nSecond line: naïve مرحبا 한국어"
+TEXT = (
+    "a" * 127 + "🐧" + "b" * 126 + "🐧"
+    "\nKDE native paste — café Ελληνικά 日本語 🐧\nSecond line: naïve مرحبا 한국어"
+)
 PREVIOUS = "Existing clipboard — preserved"
 POLICY = {
     "version": 1,
@@ -141,13 +145,19 @@ async def exercise(output, spawn):
             await asyncio.sleep(0.3)
             await call("paste_text", {"text": TEXT})
             await wait_file(fixture / "text.txt", TEXT)
+            await verify_text(call, found["id"], TEXT)
             (fixture / "read-clipboard").touch()
             await wait_file(fixture / "clipboard.txt", PREVIOUS)
             assert await capture(f"{name}-pasted") > before + 50, (
                 "Pasted text was not rendered"
             )
             results.append(
-                {"app": name, "exact_unicode": True, "clipboard_restored": True}
+                {
+                    "app": name,
+                    "exact_unicode": True,
+                    "clipboard_restored": True,
+                    "accessibility_text": True,
+                }
             )
             proc.terminate()
             await asyncio.to_thread(proc.wait, timeout=5)

@@ -22,6 +22,10 @@ def label(value, size):
     return value[:size].encode("utf-8")[:size].decode("utf-8", errors="ignore")
 
 
+def identifier(bus, owner, path):
+    return hashlib.sha256(f"{bus.identity}\0{owner}\0{path}".encode()).hexdigest()[:32]
+
+
 class AccessibilityBus:
     def __init__(self):
         from gi.repository import Gio, GLib
@@ -111,9 +115,7 @@ def discover(bus, cursor):
         try:
             owner, path = bus.child(REGISTRY, ROOT, index)
             app = {
-                "id": hashlib.sha256(
-                    f"{bus.identity}\0{owner}\0{path}".encode()
-                ).hexdigest()[:32],
+                "id": identifier(bus, owner, path),
                 "name": label(bus.property(owner, path, ACCESSIBLE, "Name"), 96),
                 "toolkit": label(
                     bus.property(

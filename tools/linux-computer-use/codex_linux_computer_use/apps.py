@@ -1,6 +1,7 @@
 """Bound application discovery, including native connection and shutdown time."""
 
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -15,14 +16,36 @@ DISCOVERY_TIMEOUT = 8
 def list_apps(cursor=0):
     if type(cursor) is not int or not 0 <= cursor < 4096:
         raise ValueError("Application cursor must be between 0 and 4095.")
+    return run_worker("apps_worker", [str(cursor)])
+
+
+def get_app_state(app_id, path=(), cursor=0, text_offset=0):
+    if not isinstance(app_id, str) or not re.fullmatch(r"[0-9a-f]{32}", app_id):
+        raise ValueError("Use an application ID returned by list_apps.")
+    if (
+        not isinstance(path, (list, tuple))
+        or len(path) > 16
+        or any(type(index) is not int or not 0 <= index < 4096 for index in path)
+        or type(cursor) is not int
+        or not 0 <= cursor < 4096
+        or type(text_offset) is not int
+        or not 0 <= text_offset <= 2147483647
+    ):
+        raise ValueError("Invalid accessibility path, cursor or text offset.")
+    return run_worker(
+        "state_worker", [app_id, json.dumps(path), str(cursor), str(text_offset)]
+    )
+
+
+def run_worker(module, args):
     with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
         try:
             result = subprocess.run(
                 [
                     sys.executable,
                     "-m",
-                    "codex_linux_computer_use.apps_worker",
-                    str(cursor),
+                    f"codex_linux_computer_use.{module}",
+                    *args,
                 ],
                 cwd=Path(__file__).resolve().parent.parent,
                 stdin=subprocess.DEVNULL,
