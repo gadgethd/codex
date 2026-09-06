@@ -2,6 +2,7 @@
 
 import json
 import sys
+from functools import partial
 
 from .apps import MAX_RESULT_BYTES
 from .apps_worker import AccessibilityBus, encode, identifier
@@ -30,8 +31,14 @@ def actions(bus, params, authorize=None):
         authorize("prepare")
         if action_name(bus, ref, index) != params["action_name"]:
             raise ValueError("The action changed before dispatch.")
-        authorize("dispatch")
-        (accepted,) = bus.call(*ref, ACTION, "DoAction", "(i)", (index,))
+        (accepted,) = bus.call(
+            *ref,
+            ACTION,
+            "DoAction",
+            "(i)",
+            (index,),
+            before_call=partial(authorize, "dispatch"),
+        )
         if type(accepted) is not bool:
             raise ValueError("Invalid native action result")
         return {"accepted": accepted}
@@ -74,8 +81,6 @@ if __name__ == "__main__":
 
     params = json.loads(sys.argv[1])
     policy = read_policy(int(sys.argv[2]))
-    if "action_index" in params:
-        policy.require_desktop()
     result = actions(
         AccessibilityBus(policy),
         params,

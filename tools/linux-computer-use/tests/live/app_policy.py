@@ -6,7 +6,7 @@ from functools import partial
 from accessibility import button_action, verify_text
 
 
-async def verify_reads(client, call, app, launcher, text, policy):
+async def verify_reads(client, call, app, launcher, text, policy, activated, wait_file):
     allowed = {
         **policy,
         "defaultAppAccess": "deny",
@@ -16,10 +16,6 @@ async def verify_reads(client, call, app, launcher, text, policy):
     assert [item["id"] for item in page["apps"]] == [app["id"]], page
     await verify_text(partial(call, policy=allowed), app["id"], text)
     action = await button_action(partial(call, policy=allowed), app["id"])
-    result = await client.call_tool(
-        "perform_action", action, meta={"codex/linuxComputerUsePolicy": allowed}
-    )
-    assert result.is_error
     denied = {**allowed, "desktopIds": {app["desktop_id"]: "deny"}}
     page = (await call("list_apps", policy=denied)).content[0].text
     assert not json.loads(page)["apps"] and app["window"] not in page
@@ -33,6 +29,10 @@ async def verify_reads(client, call, app, launcher, text, policy):
         assert result.is_error and (text[:127] or app["window"]) not in str(
             result.content
         )
+        result = await client.call_tool(
+            "perform_action", action, meta={"codex/linuxComputerUsePolicy": rule}
+        )
+        assert result.is_error and not activated.exists()
 
     await blocked(denied)
     await call("get_app_state", {"app_id": app["id"]}, policy=allowed)
@@ -44,3 +44,8 @@ async def verify_reads(client, call, app, launcher, text, policy):
     finally:
         launcher.write_text(original)
     await call("get_app_state", {"app_id": app["id"]}, policy=allowed)
+    result = await call("perform_action", action, policy=allowed)
+    assert result.structured_content == {"accepted": True}
+    await wait_file(activated, "1")
+    activated.unlink()
+    await blocked(denied)

@@ -10,6 +10,11 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+if __package__:
+    from .cli_actions import advance_actions
+else:
+    from cli_actions import advance_actions
+
 HERE = Path(__file__).resolve().parent
 TEXT = "Codex CLI paste — café Ελληνικά 日本語 🐧\nSecond line: naïve مرحبا 한국어"
 PREVIOUS = "Existing clipboard — preserved"
@@ -172,6 +177,12 @@ async def run_policy(run, codex, gtk, calls, policy):
                             for app in discovered["apps"]
                             if app["window"] == "Codex GTK paste fixture"
                         )
+                if (
+                    policy == "app-only"
+                    and number > 0
+                    and advance_actions(state, calls, body, number)
+                ):
+                    wait_file(gtk / "activated", "1")
                 if number < len(calls):
                     name, args = calls[number]
                     args = dict(args)
@@ -256,7 +267,7 @@ async def run_policy(run, codex, gtk, calls, policy):
         "mcp_servers.linux_computer_use.tool_timeout_sec": 150,
         **{
             f"mcp_servers.linux_computer_use.tools.{name}.approval_mode": "approve"
-            for name in ("click", "press_key", "paste_text")
+            for name in ("click", "press_key", "paste_text", "perform_action")
         },
     }
     args = [

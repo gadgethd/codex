@@ -22,11 +22,19 @@ class ActionTests(unittest.TestCase):
             if interface == ACTION
             else original(owner, path, interface, name)
         )
-        self.bus.call = lambda owner, path, interface, method, signature, args: (
-            (self.names[args[0]],)
-            if method == "GetName"
-            else (self.dispatched.append(args[0]) is None,)
-        )
+
+        def native_call(
+            owner, path, interface, method, signature, args, *, before_call=None
+        ):
+            if before_call is not None:
+                before_call()
+            return (
+                (self.names[args[0]],)
+                if method == "GetName"
+                else (self.dispatched.append(args[0]) is None,)
+            )
+
+        self.bus.call = native_call
         self.params = {
             "app_id": identifier(self.bus, ":1.0", "/root"),
             "node_id": identifier(self.bus, ":1.0", "/text"),
@@ -100,7 +108,10 @@ class ActionToolTests(unittest.IsolatedAsyncioTestCase):
         effects = []
 
         def dispatch(params, *, poll, check_lock, policy):
-            policy.require_desktop()
+            try:
+                policy.require_app("editor.desktop")
+            except PermissionError as error:
+                raise PortalError("Action was not dispatched: denied app") from error
             check_lock()
             effects.append(params)
             return {"accepted": True}
@@ -136,7 +147,14 @@ class ActionToolTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(result.is_error)
                 self.assertEqual(effects, [])
                 locked.side_effect = [False, False, False]
-                result = await call(args, policy)
+                result = await call(
+                    args,
+                    {
+                        **policy,
+                        "defaultAppAccess": "deny",
+                        "desktopIds": {"editor.desktop": "allow"},
+                    },
+                )
                 self.assertEqual(result.structured_content, {"accepted": True})
                 self.assertEqual(effects, [{**args, "path": (0,)}])
                 for state in (True, PortalError("Unknown lock state")):

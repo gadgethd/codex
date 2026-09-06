@@ -64,17 +64,33 @@ class AccessibilityBus:
             "GetId",
         )[0]
 
-    def call(self, owner, path, interface, method, signature=None, args=()):
+    def call(
+        self,
+        owner,
+        path,
+        interface,
+        method,
+        signature=None,
+        args=(),
+        *,
+        before_call=None,
+    ):
         if time.monotonic() >= self.deadline:
             raise TimeoutError("Accessibility query deadline exceeded")
         self.require_owner(owner)
+        parameters = self.GLib.Variant(signature, args) if signature else None
+        if before_call is not None:
+            before_call()
+        # Identity queries and the dispatch handshake consume the same deadline.
+        if time.monotonic() >= self.deadline:
+            raise TimeoutError("Accessibility query deadline exceeded")
         try:
             result = self.bus.call_sync(
                 owner,
                 path,
                 interface,
                 method,
-                self.GLib.Variant(signature, args) if signature else None,
+                parameters,
                 None,
                 self.Gio.DBusCallFlags.NO_AUTO_START,
                 1000,
