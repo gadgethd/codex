@@ -25,12 +25,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS
-          - os: ${{ github.repository == 'openai/codex' && 'macos-15-xlarge' || 'macos-15' }}
-            target: aarch64-apple-darwin
-          - os: ${{ github.repository == 'openai/codex' && 'macos-15-xlarge' || 'macos-15' }}
-            target: x86_64-apple-darwin
-
           # Linux
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
@@ -51,7 +45,7 @@ jobs:
       name: bazel
       deployment: false
 
-    steps:
+    steps: &test_steps
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
@@ -129,7 +123,26 @@ jobs:
         if: always() && !cancelled()
         uses: ./.github/actions/check-clean-worktree
 
+  test-macos:
+    if: ${{ github.repository == 'openai/codex' }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15-xlarge
+            target: aarch64-apple-darwin
+          - os: macos-15-xlarge
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    name: Bazel test on ${{ matrix.os }} for ${{ matrix.target }}
+    environment:
+      name: bazel
+      deployment: false
+    steps: *test_steps
+
   test-windows-shard:
+    if: ${{ github.repository == 'openai/codex' }}
     # Split the Windows Bazel test leg across separate Windows hosts. Jobs with
     # BuildBuddy credentials use Linux RBE for build actions; test execution
     # remains on a Windows runner.
@@ -240,7 +253,7 @@ jobs:
   test-windows:
     # Preserve the existing required-check surface while the real work happens
     # in the sharded Windows jobs above.
-    if: always()
+    if: ${{ github.repository == 'openai/codex' && always() }}
     needs: test-windows-shard
     runs-on: ubuntu-24.04
     name: Bazel test on windows-latest for x86_64-pc-windows-gnullvm
@@ -258,7 +271,7 @@ jobs:
     # Native Windows Bazel tests are slower and frequently approach the
     # 30-minute PR budget. Run this only for post-merge commits to main and give
     # it a larger timeout.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: ${{ github.repository == 'openai/codex' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     timeout-minutes: ${{ github.repository == 'openai/codex' && 40 || 90 }}
     runs-on: >-
       ${{ github.repository == 'openai/codex'
@@ -348,21 +361,13 @@ jobs:
           # that the Bazel test job uses.
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
-          - os: ${{ github.repository == 'openai/codex' && 'macos-15-xlarge' || 'macos-15' }}
-            target: aarch64-apple-darwin
-          - os: windows-latest
-            target: x86_64-pc-windows-gnullvm
-            runs_on: >-
-              ${{ github.repository == 'openai/codex'
-                  && fromJSON('{"group":"codex-runners","labels":"codex-windows-x64"}')
-                  || 'windows-latest' }}
-    runs-on: ${{ matrix.runs_on || matrix.os }}
+    runs-on: ${{ matrix.os }}
     name: Bazel clippy on ${{ matrix.os }} for ${{ matrix.target }}
     environment:
       name: bazel
       deployment: false
 
-    steps:
+    steps: &clippy_steps
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
@@ -440,6 +445,42 @@ jobs:
         if: always() && !cancelled()
         uses: ./.github/actions/check-clean-worktree
 
+  clippy-macos:
+    if: ${{ github.repository == 'openai/codex' }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15-xlarge
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    name: Bazel clippy on ${{ matrix.os }} for ${{ matrix.target }}
+    environment:
+      name: bazel
+      deployment: false
+    steps: *clippy_steps
+
+  clippy-windows:
+    if: ${{ github.repository == 'openai/codex' }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runs_on: >-
+              ${{ github.repository == 'openai/codex'
+                  && fromJSON('{"group":"codex-runners","labels":"codex-windows-x64"}')
+                  || 'windows-latest' }}
+            os: windows-latest
+            target: x86_64-pc-windows-gnullvm
+    runs-on: ${{ matrix.runs_on || matrix.os }}
+    name: Bazel clippy on ${{ matrix.os }} for ${{ matrix.target }}
+    environment:
+      name: bazel
+      deployment: false
+    steps: *clippy_steps
+
   verify-release-build:
     timeout-minutes: ${{ github.repository == 'openai/codex' && 30 || 90 }}
     strategy:
@@ -448,21 +489,13 @@ jobs:
         include:
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
-          - os: ${{ github.repository == 'openai/codex' && 'macos-15-xlarge' || 'macos-15' }}
-            target: aarch64-apple-darwin
-          - os: windows-latest
-            target: x86_64-pc-windows-gnullvm
-            runs_on: >-
-              ${{ github.repository == 'openai/codex'
-                  && fromJSON('{"group":"codex-runners","labels":"codex-windows-x64"}')
-                  || 'windows-latest' }}
-    runs-on: ${{ matrix.runs_on || matrix.os }}
+    runs-on: ${{ matrix.os }}
     name: Verify release build on ${{ matrix.os }} for ${{ matrix.target }}
     environment:
       name: bazel
       deployment: false
 
-    steps:
+    steps: &verify_release_steps
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
@@ -556,3 +589,39 @@ jobs:
       - name: Check for a clean worktree
         if: always() && !cancelled()
         uses: ./.github/actions/check-clean-worktree
+
+  verify-release-build-macos:
+    if: ${{ github.repository == 'openai/codex' }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15-xlarge
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    name: Verify release build on ${{ matrix.os }} for ${{ matrix.target }}
+    environment:
+      name: bazel
+      deployment: false
+    steps: *verify_release_steps
+
+  verify-release-build-windows:
+    if: ${{ github.repository == 'openai/codex' }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runs_on: >-
+              ${{ github.repository == 'openai/codex'
+                  && fromJSON('{"group":"codex-runners","labels":"codex-windows-x64"}')
+                  || 'windows-latest' }}
+            os: windows-latest
+            target: x86_64-pc-windows-gnullvm
+    runs-on: ${{ matrix.runs_on || matrix.os }}
+    name: Verify release build on ${{ matrix.os }} for ${{ matrix.target }}
+    environment:
+      name: bazel
+      deployment: false
+    steps: *verify_release_steps

@@ -163,7 +163,7 @@ jobs:
 
   argument_comment_lint_prebuilt:
     name: Argument comment lint - ${{ matrix.name }}
-    runs-on: ${{ matrix.runs_on || matrix.runner }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: ${{ github.repository == 'openai/codex' && matrix.timeout_minutes || 90 }}
     needs: changed
     environment:
@@ -176,17 +176,7 @@ jobs:
           - name: Linux
             runner: ubuntu-24.04
             timeout_minutes: 30
-          - name: macOS
-            runner: ${{ github.repository == 'openai/codex' && 'macos-15-xlarge' || 'macos-15' }}
-            timeout_minutes: 30
-          - name: Windows
-            runner: windows-x64
-            timeout_minutes: 30
-            runs_on: >-
-              ${{ github.repository == 'openai/codex'
-                  && fromJSON('{"group":"codex-runners","labels":"codex-windows-x64"}')
-                  || 'windows-latest' }}
-    steps:
+    steps: &argument_comment_lint_steps
       - name: Check whether argument comment lint should run
         id: argument_comment_lint_gate
         shell: bash
@@ -215,6 +205,48 @@ jobs:
       - name: Check for a clean worktree
         if: always() && !cancelled() && steps.argument_comment_lint_gate.outputs.run == 'true'
         uses: ./.github/actions/check-clean-worktree
+
+  argument_comment_lint_macos:
+    # macOS argument-comment-lint only applies upstream on openai/codex; forks target Linux.
+    if: ${{ github.repository == 'openai/codex' }}
+    name: Argument comment lint - macOS
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    needs: changed
+    environment:
+      name: bazel
+      deployment: false
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            runner: macos-15-xlarge
+            timeout_minutes: 30
+    steps: *argument_comment_lint_steps
+
+  argument_comment_lint_windows:
+    # Windows argument-comment-lint only applies upstream on openai/codex; forks target Linux.
+    if: ${{ github.repository == 'openai/codex' }}
+    name: Argument comment lint - Windows
+    runs-on: ${{ matrix.runs_on }}
+    timeout-minutes: 30
+    needs: changed
+    environment:
+      name: bazel
+      deployment: false
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            runner: windows-x64
+            timeout_minutes: 30
+            runs_on: >-
+              ${{ github.repository == 'openai/codex'
+                  && fromJSON('{"group":"codex-runners","labels":"codex-windows-x64"}')
+                  || 'windows-latest' }}
+    steps: *argument_comment_lint_steps
 
   # --- Gatherer job that you mark as the ONLY required status -----------------
   results:
